@@ -26,9 +26,8 @@ def get_next_task_id():
 def cmd_add(args):
     prompt_text = " ".join(args.prompt).strip()
     if not prompt_text:
-        print("Error: Prompt cannot be empty. Usage: task add <prompt> [-r repo] [-m model]")
+        print("Error: Prompt cannot be empty. Usage: task <prompt> [-r repo] [-m model]")
         sys.exit(1)
-
     repo = args.repo
     if not repo:
         try:
@@ -36,11 +35,9 @@ def cmd_add(args):
             repo = Path(cwd_repo).name
         except Exception:
             repo = "chess-repertoire-srs"
-
     task_id = get_next_task_id()
     filename = f"{task_id}-{args.type}.yaml"
     task_file = TASKS_DIR / filename
-
     data = {
         "id": task_id,
         "repo": repo,
@@ -50,15 +47,21 @@ def cmd_add(args):
         "model": args.model if args.model else "gemini-3.5-flash-lite",
         "prompt": prompt_text
     }
-
     with open(task_file, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
-
     print(f"\033[32m✔ Task #{task_id} queued for {repo}:\033[0m")
-    print(f"  File: {task_file}")
     print(f"  Prompt: {prompt_text}")
     print(f"  Model: {data['model']}")
-    print("\nWorker will pick it up automatically. Run 'task logs -f' to watch.")
+    print("\nWorker will launch interactive Codex session. Run 'task attach' to open it live.")
+
+def cmd_attach(args):
+    res = subprocess.run(["tmux", "has-session", "-t", "codex-live"], capture_output=True)
+    if res.returncode == 0:
+        print("\033[32mAttaching directly to live Codex session (press Ctrl-b d to detach without stopping)...\033[0m")
+        time.sleep(0.5)
+        subprocess.run(["tmux", "attach", "-t", "codex-live"])
+    else:
+        print("No Codex session is currently running. Queue a task with: task 'your task'")
 
 def cmd_list(args):
     print("\033[1m=== Active / Pending Tasks ===\033[0m")
@@ -81,6 +84,7 @@ def cmd_current(args):
             print("\033[1;32mCurrently Running Task:\033[0m")
             for k, v in data.items():
                 print(f"  {k}: {v}")
+            print("\nRun 'task attach' to enter this session live.")
             return
         except Exception:
             pass
@@ -101,58 +105,14 @@ def cmd_history(args):
             if item.get("notes"):
                 print(f"    Notes: {', '.join(item['notes'])}")
 
-def cmd_attach(args):
-    # Check if tmux session codex-live exists
-    res = subprocess.run(["tmux", "has-session", "-t", "codex-live"], capture_output=True)
-    if res.returncode == 0:
-        print("[32mAttaching to live Codex session (press Ctrl-b d to detach without stopping)...[0m")
-        time.sleep(1)
-        subprocess.run(["tmux", "attach", "-t", "codex-live"])
-    else:
-        print("No agent is currently executing. Use 'task logs --last' to see previous run, or 'task resume' to open Codex TUI.")
-
-def cmd_steer(args):
-    msg = " ".join(args.message).strip()
-    if not msg:
-        print("Usage: task steer <message>")
-        return
-    current_file = STATE_DIR / "current.json"
-    if not current_file.exists():
-        print("No task currently executing to steer.")
-        return
-    # Find active session id from latest log
-    logs = sorted(LOGS_DIR.glob("codex_exec_*.log"), key=os.path.getmtime)
-    if not logs:
-        print("No log file found.")
-        return
-    import re
-    log_content = logs[-1].read_text(errors="ignore")
-    # Clean ANSI codes
-    clean_text = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
-    m = re.search(r'session id:\s*([a-f0-9\-]+)', clean_text)
-    if not m:
-        print("Could not find active session ID in log.")
-        return
-    session_id = m.group(1).strip()
-    print(f"[32mSending steering instruction to session {session_id}...[0m")
-    res = subprocess.run(["codex", "queue", "--thread", session_id, "--message", msg], capture_output=True, text=True)
-    if res.returncode == 0:
-        print(f"[32m✔ Injected successfully:[0m {msg}")
-    else:
-        print(f"[31mError queueing message:[0m {res.stderr}")
-
-def cmd_resume(args):
-    print("[32mOpening previous agent session in interactive Codex TUI...[0m")
-    subprocess.run(["codex", "resume", "--include-non-interactive", "--last"])
-
 def cmd_logs(args):
     if args.last:
-        exec_logs = sorted(LOGS_DIR.glob("codex_exec_*.log"), key=os.path.getmtime)
-        if not exec_logs:
+        logs = sorted(LOGS_DIR.glob("codex_*.log"), key=os.path.getmtime)
+        if not logs:
             print("No execution logs found.")
             return
-        target = exec_logs[-1]
-        print(f"\033[1mShowing latest task execution log ({target.name}):\033[0m")
+        target = logs[-1]
+        print(f"\033[1mShowing latest task log ({target.name}):\033[0m")
         if args.follow:
             subprocess.run(["tail", "-f", str(target)])
         else:
@@ -168,7 +128,7 @@ def cmd_logs(args):
             subprocess.run(["tail", f"-n{args.lines}", str(worker_log)])
 
 def main():
-    KNOWN_COMMANDS = {"add", "list", "current", "history", "logs", "attach", "resume", "steer", "-h", "--help"}
+    KNOWN_COMMANDS = {"add", "attach", "list", "current", "history", "logs", "-h", "--help"}
     if len(sys.argv) > 1 and sys.argv[1] not in KNOWN_COMMANDS:
         sys.argv.insert(1, "add")
 
@@ -182,11 +142,7 @@ def main():
     p_add.add_argument("-t", "--type", default="feature", help="Task type (bugfix, feature, chore, test)")
     p_add.add_argument("-p", "--priority", default="medium", choices=["low", "medium", "high"])
 
-    sub.add_parser("attach", help="Attach live to running agent TUI session")
-    sub.add_parser("resume", help="Resume previous interactive session in Codex TUI")
-    p_steer = sub.add_parser("steer", help="Send a live steering instruction to the running agent")
-    p_steer.add_argument("message", nargs="+", help="Steering message/correction for the agent")
-
+    sub.add_parser("attach", help="Attach directly into the live interactive Codex TUI session")
     sub.add_parser("list", help="List all tasks in queue")
     sub.add_parser("current", help="Show currently running task details")
 
@@ -196,24 +152,20 @@ def main():
     p_logs = sub.add_parser("logs", help="View supervisor or execution logs")
     p_logs.add_argument("-f", "--follow", action="store_true", help="Follow log stream")
     p_logs.add_argument("-n", "--lines", type=int, default=30, help="Number of lines")
-    p_logs.add_argument("--last", action="store_true", help="View the most recent task agent execution log")
+    p_logs.add_argument("--last", action="store_true", help="View the most recent task execution log")
 
     args = parser.parse_args()
 
     if args.command == "add":
         cmd_add(args)
+    elif args.command == "attach":
+        cmd_attach(args)
     elif args.command == "list":
         cmd_list(args)
     elif args.command == "current":
         cmd_current(args)
     elif args.command == "history":
         cmd_history(args)
-    elif args.command == "attach":
-        cmd_attach(args)
-    elif args.command == "steer":
-        cmd_steer(args)
-    elif args.command == "resume":
-        cmd_resume(args)
     elif args.command == "logs":
         cmd_logs(args)
     else:
@@ -221,4 +173,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

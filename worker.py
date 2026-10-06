@@ -10,8 +10,6 @@ import logging
 import datetime
 import subprocess
 from pathlib import Path
-import urllib.request
-import urllib.error
 
 # Load config
 CONFIG_FILE = Path(os.environ.get("CODEX_WORKER_CONFIG", "/home/ubuntu/codex-worker/config.json"))
@@ -27,6 +25,7 @@ else:
         "state_dir": "/home/ubuntu/srv-codex/state",
         "logs_dir": "/home/ubuntu/srv-codex/logs",
         "task_timeout_seconds": 3600,
+        "idle_timeout_seconds": 60,
         "poll_interval_seconds": 15,
         "rate_limit_backoff_seconds": 300,
         "max_consecutive_failures": 5,
@@ -48,7 +47,6 @@ LOGS_DIR = Path(CONFIG.get("logs_dir", str(BASE_DIR / "logs")))
 for d in [TASKS_DIR, WORKTREES_DIR, REPOS_DIR, STATE_DIR, LOGS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -62,6 +60,7 @@ logger = logging.getLogger("codex-worker")
 HISTORY_FILE = STATE_DIR / "history.jsonl"
 FAILURES_FILE = STATE_DIR / "failures.jsonl"
 CURRENT_FILE = STATE_DIR / "current.json"
+TMUX_SESSION_NAME = "codex-live"
 
 RUNNING = True
 
@@ -73,22 +72,10 @@ def handle_sigterm(signum, frame):
 signal.signal(signal.SIGINT, handle_sigterm)
 signal.signal(signal.SIGTERM, handle_sigterm)
 
-def check_cliproxy_health(cliproxy_url):
-    try:
-        req = urllib.request.Request(f"{cliproxy_url}/models", headers={
-            "User-Agent": "codex-worker",
-            "Authorization": "Bearer sk-JxARBmEuH2dxVTsmhEtJ0uOBJUTUMxb7UAcIU8TfxNBve3ZK"
-        })
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.status == 200
-    except Exception as e:
-        logger.debug(f"CLIProxyAPI health check note: {e}")
-        return False
-
 def record_journal(entry, failure=False):
     target = FAILURES_FILE if failure else HISTORY_FILE
     with open(target, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+        f.write(json.dumps(entry) + chr(10))
 
 def get_failed_approaches_for_repo(repo_name):
     notes = []
@@ -110,10 +97,7 @@ def find_next_task():
             continue
         try:
             with open(path, "r") as f:
-                if path.suffix in [".yaml", ".yml"]:
-                    data = yaml.safe_load(f)
-                else:
-                    data = json.load(f)
+                data = yaml.safe_load(f) if path.suffix in [".yaml", ".yml"] else json.load(f)
             if data and data.get("status", "pending") == "pending":
                 return path, data
         except Exception as e:
@@ -139,13 +123,11 @@ def mark_task_status(path, data, status):
 
 def setup_worktree(repo_path, branch_name, worktree_path):
     if worktree_path.exists():
-        logger.info(f"Worktree path {worktree_path} already exists. Cleaning up...")
         subprocess.run(["git", "-C", str(repo_path), "worktree", "remove", "--force", str(worktree_path)], capture_output=True)
         if worktree_path.exists():
             shutil.rmtree(worktree_path, ignore_errors=True)
 
     subprocess.run(["git", "-C", str(repo_path), "fetch", "--all"], capture_output=True)
-
     proc = subprocess.run(["git", "-C", str(repo_path), "rev-parse", "--verify", "main"], capture_output=True)
     base_ref = "main" if proc.returncode == 0 else "master"
 
@@ -168,65 +150,103 @@ def cleanup_worktree(repo_path, worktree_path):
         logger.warning(f"Error cleaning up worktree {worktree_path}: {e}")
 
 def run_codex_job(worktree_path, full_prompt, model, timeout_secs):
-    task_log_file = LOGS_DIR / f"codex_exec_{int(time.time())}.log"
-    exit_code_file = LOGS_DIR / f"codex_exit_{int(time.time())}.status"
+    task_log_file = LOGS_DIR / f"codex_live_{int(time.time())}.log"
     cliproxy_info = CONFIG.get("cliproxy", {})
     cliproxy_url = cliproxy_info.get("url", "http://127.0.0.1:8317/v1")
     catalog_json = cliproxy_info.get("catalog_json", "/home/ubuntu/.codex/model-catalogs/gateway.json")
+    idle_limit = CONFIG.get("idle_timeout_seconds", 60)
 
+    # Write prompt to file to ensure clean loading
     prompt_file = worktree_path / ".agent_prompt.txt"
     prompt_file.write_text(full_prompt)
 
-    runner_script = worktree_path / ".run_agent.sh"
-    cmd_body = [
-        "#!/bin/bash",
-        f'codex exec -C "{worktree_path}" -c openai_base_url="{cliproxy_url}" -c model="{model}" -c model_catalog_json="{catalog_json}" --color always --sandbox workspace-write --dangerously-bypass-approvals-and-sandbox < "{prompt_file}" 2>&1 | tee "{task_log_file}"',
-        f'echo $? > "{exit_code_file}"'
+    # Launch real interactive codex inside tmux with initial prompt
+    cmd = [
+        "codex",
+        "-C", str(worktree_path),
+        "-c", f'openai_base_url="{cliproxy_url}"',
+        "-c", f'model="{model}"',
+        "-c", f'model_catalog_json="{catalog_json}"',
+        "--dangerously-bypass-approvals-and-sandbox",
+        full_prompt
     ]
-    runner_script.write_text(chr(10).join(cmd_body) + chr(10))
-    runner_script.chmod(0o755)
 
-    logger.info(f"Starting live Codex agent in tmux session 'codex-live' with model {model} (timeout={timeout_secs}s)")
+    logger.info(f"Launching real interactive Codex TUI in tmux session '{TMUX_SESSION_NAME}' with model {model} (timeout={timeout_secs}s)")
     start_time = time.time()
-    subprocess.run(["tmux", "kill-session", "-t", "codex-live"], capture_output=True)
-    res = subprocess.run(["tmux", "new-session", "-d", "-s", "codex-live", "-c", str(worktree_path), str(runner_script)], capture_output=True, text=True)
+
+    # Clean previous tmux session
+    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION_NAME], capture_output=True)
+
+    # Start interactive Codex inside tmux window
+    res = subprocess.run([
+        "tmux", "new-session", "-d", "-s", TMUX_SESSION_NAME,
+        "-x", "140", "-y", "45",
+        "-c", str(worktree_path)
+    ], capture_output=True, text=True)
+
     if res.returncode != 0:
         logger.error(f"Failed to start tmux session: {res.stderr}")
         return False, f"tmux_error: {res.stderr}", task_log_file
 
-    exit_code = None
+    # Send codex command to pane
+    escaped_prompt = full_prompt.replace("'", "'\''")
+    codex_cmd = f"codex -C '{worktree_path}' -c openai_base_url='{cliproxy_url}' -c model='{model}' -c model_catalog_json='{catalog_json}' --dangerously-bypass-approvals-and-sandbox '{escaped_prompt}'"
+    subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, codex_cmd, "C-m"])
+
+    # Monitor session
+    consecutive_idle_seconds = 0
     while time.time() - start_time < timeout_secs:
-        if exit_code_file.exists():
-            try:
-                exit_code = int(exit_code_file.read_text().strip())
+        # Check if tmux session still exists
+        has_session = subprocess.run(["tmux", "has-session", "-t", TMUX_SESSION_NAME], capture_output=True)
+        if has_session.returncode != 0:
+            # Session closed by user (e.g. via Ctrl-D or /exit)
+            logger.info("Session closed naturally by user or process exit.")
+            break
+
+        # Capture pane text
+        pane_res = subprocess.run(["tmux", "capture-pane", "-pt", TMUX_SESSION_NAME], capture_output=True, text=True)
+        pane_text = pane_res.stdout if pane_res.returncode == 0 else ""
+
+        # Check if client is currently attached (human actively viewing/interacting)
+        clients_res = subprocess.run(["tmux", "list-clients", "-t", TMUX_SESSION_NAME], capture_output=True, text=True)
+        has_client = bool(clients_res.stdout.strip())
+
+        # Check if agent is currently working
+        is_working = ("esc to interrupt" in pane_text or "Working" in pane_text or "◦" in pane_text)
+
+        if has_client:
+            # Human is actively attached in TUI — never auto-close while human is interacting!
+            consecutive_idle_seconds = 0
+        elif not is_working and ("Ask Codex to do anything" in pane_text or "›" in pane_text):
+            # Agent has completed its turn and is idle at prompt, with no human attached
+            consecutive_idle_seconds += 2
+            if consecutive_idle_seconds >= idle_limit:
+                logger.info(f"Agent finished work and remained idle for {idle_limit}s with no human attached. Concluding session...")
+                # Gracefully exit Codex: Ctrl-C then Ctrl-D
+                subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-c"])
+                time.sleep(0.5)
+                subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-d"])
+                time.sleep(1.5)
+                subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION_NAME], capture_output=True)
                 break
-            except Exception:
-                pass
-        time.sleep(1)
+        else:
+            consecutive_idle_seconds = 0
+
+        time.sleep(2)
 
     elapsed = time.time() - start_time
-    exit_code_file.unlink(missing_ok=True)
-    runner_script.unlink(missing_ok=True)
+
+    # Save final pane capture to log
+    pane_res = subprocess.run(["tmux", "capture-pane", "-pt", TMUX_SESSION_NAME], capture_output=True, text=True)
+    if pane_res.returncode == 0:
+        task_log_file.write_text(pane_res.stdout)
     prompt_file.unlink(missing_ok=True)
 
-    if exit_code is None:
-        logger.error("Task timed out. Killing tmux session 'codex-live'...")
-        subprocess.run(["tmux", "kill-session", "-t", "codex-live"], capture_output=True)
-        return False, "timeout", task_log_file
+    # Clean tmux session if still open
+    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION_NAME], capture_output=True)
 
-    subprocess.run(["tmux", "kill-session", "-t", "codex-live"], capture_output=True)
-
-    if exit_code == 0:
-        logger.info(f"Codex completed successfully in {elapsed:.1f}s")
-        return True, "completed", task_log_file
-    else:
-        logger.warning(f"Codex exited with code {exit_code} in {elapsed:.1f}s")
-        if task_log_file.exists():
-            with open(task_log_file, "r") as f:
-                log_tail = f.read()[-2000:]
-            if any(k in log_tail.lower() for k in ["429", "rate limit", "quota", "overloaded", "cooling"]):
-                return False, "rate_limited", task_log_file
-        return False, f"exit_code_{exit_code}", task_log_file
+    logger.info(f"Codex interactive session concluded in {elapsed:.1f}s")
+    return True, "completed", task_log_file
 
 def execute_task(task_file, task_data):
     task_id = str(task_data.get("id", task_file.stem))
@@ -236,17 +256,15 @@ def execute_task(task_file, task_data):
     branch_name = f"agent/task-{task_id}-{int(time.time())}"
     worktree_path = WORKTREES_DIR / f"task-{task_id}"
 
-    # Find repo
     repo_path = REPOS_DIR / repo_name
     if not repo_path.exists():
         cand = Path(f"/home/ubuntu/github-projects/{repo_name}")
         if cand.exists():
             repo_path = cand
     if not repo_path.exists():
-        logger.error(f"Repo {repo_name} not found at {repo_path} or /home/ubuntu/github-projects/{repo_name}")
+        logger.error(f"Repo {repo_name} not found")
         return False, "repo_not_found"
 
-    # Build prompt
     system_prompt_file = Path("/home/ubuntu/codex-worker/task_prompt.md")
     system_prompt = system_prompt_file.read_text() if system_prompt_file.exists() else ""
     failed_notes = get_failed_approaches_for_repo(repo_name)
@@ -262,6 +280,7 @@ def execute_task(task_file, task_data):
         "branch": branch_name,
         "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "model": model,
+        "tmux_session": TMUX_SESSION_NAME,
         "status": "running"
     }, indent=2))
 
@@ -342,4 +361,3 @@ def main_loop():
 
 if __name__ == "__main__":
     main_loop()
-
