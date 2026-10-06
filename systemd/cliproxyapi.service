@@ -1,0 +1,26 @@
+[Unit]
+Description=CLIProxyAPI Gateway Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/CLIProxyAPI
+
+ExecStart=/home/ubuntu/CLIProxyAPI/cli-proxy-api -config /home/ubuntu/CLIProxyAPI/config.yaml
+
+Restart=always
+RestartSec=15
+TimeoutStopSec=30
+
+Environment=HOME=/home/ubuntu
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+StandardOutput=append:/home/ubuntu/CLIProxyAPI/logs/service.log
+StandardError=append:/home/ubuntu/CLIProxyAPI/logs/service.err
+
+[Install]
+WantedBy=multi-user.target
+

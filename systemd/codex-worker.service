@@ -1,0 +1,26 @@
+[Unit]
+Description=24/7 Codex Autonomous Worker
+After=network-online.target cliproxyapi.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/codex-worker
+
+ExecStart=/usr/bin/python3 /home/ubuntu/codex-worker/worker.py
+
+Restart=always
+RestartSec=30
+TimeoutStopSec=30
+
+Environment=HOME=/home/ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+StandardOutput=append:/home/ubuntu/srv-codex/logs/worker.log
+StandardError=append:/home/ubuntu/srv-codex/logs/worker.err
+
+[Install]
+WantedBy=multi-user.target
+
