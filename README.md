@@ -92,47 +92,48 @@ The script creates the runtime directories, installs `task` into `~/.local/bin/`
 
 ## Usage
 
-### 1. Queueing Tasks
+### 1. The Autopilot Control Deck (TUI)
 
-Queue tasks from any directory on your machine:
+Launch the dedicated two-column terminal control surface:
 
 ```bash
-# Plain task description (defaults to the active repo or default repo):
-task "Inspect review_service.dart and fix the whitespace trimming bug"
-
-# Explicit repository and model override:
-task add "Run tests and verify FSRS scheduler" -r chess-repertoire-srs -m agentrouter/deepseek-v4-flash
-
-# Specify priority or task type:
-task add "Audit schema migrations" -r my-app -t bugfix -p high
+# Launch the interactive split control deck over SSH:
+autopilot
 ```
 
-### 2. Monitoring & Live Observation
+- **Left Pane (~42% width)**: Shows 24/7 daemon status and rich campaign cards (status pill, runtime, objective, branch, iteration counter, and PLAN checklist progress).
+- **Right Pane (~58% width)**: Live interactive agent workspace. Press `Enter` on an active campaign to jump into the session and talk directly to Codex.
+- **Navigation**: Use `Up`/`Down` or `j`/`k` to browse. Press `Tab`, `F6`, `Alt-Left`, or click the sidebar with your mouse to return to the cards. Press `n` to queue a new campaign. Press `q` to detach.
+
+### 2. Queueing 24/7 Autonomous Campaigns
+
+Queue long-running iterative campaigns from any directory:
 
 ```bash
-# Watch the live running agent TUI:
-task attach
+# Queue a continuous multi-iteration engineering campaign:
+autopilot queue "Audit timezone handling in review_history, add regression tests, and fix edge cases"
 
-# Detach from live view:
-# Press Ctrl-b d
+# Specify explicit repository, model, and iteration budget:
+autopilot queue "Harden authentication flow and migrations" -r my-app -m agentrouter/deepseek-v4-flash --iterations 25
+```
 
-# Check active task details:
-task current
+### 3. CLI Management
 
-# List pending and completed tasks:
-task list
+```bash
+# Check active campaign details:
+autopilot current
 
-# Inspect recent task history and notes:
-task history
+# List pending and completed campaigns:
+autopilot list
+
+# Inspect recent campaign history and notes:
+autopilot history
 
 # Stream daemon logs:
-task logs -f
+autopilot logs -f
 
-# View the full output from the latest agent execution:
-task logs --last
-
-# Reopen the completed agent session in interactive Codex TUI:
-task resume
+# View full output from the latest agent execution:
+autopilot logs --last
 ```
 
 ---

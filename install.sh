@@ -33,8 +33,10 @@ fi
 
 cp prompts/task_prompt.md "$INSTALL_DIR/task_prompt.md"
 
-# 3. Install CLI tool
-echo "[3/6] Installing 'task' CLI into $BIN_DIR/task..."
+# 3. Install Autopilot CLI and TUI Deck
+echo "[3/6] Installing 'autopilot' CLI into $BIN_DIR/autopilot..."
+cp bin/autopilot "$BIN_DIR/autopilot"
+chmod +x "$BIN_DIR/autopilot"
 cp bin/task "$BIN_DIR/task"
 chmod +x "$BIN_DIR/task"
 cp bin/sidebar.py "$BIN_DIR/sidebar.py"

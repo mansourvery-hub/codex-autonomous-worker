@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+import sys
+import os
+import time
+import json
+import yaml
+import glob
+import argparse
+import subprocess
+from pathlib import Path
+
+TASKS_DIR = Path("/home/ubuntu/srv-codex/tasks")
+LOGS_DIR = Path("/home/ubuntu/srv-codex/logs")
+STATE_DIR = Path("/home/ubuntu/srv-codex/state")
+REPOS_DIR = Path("/home/ubuntu/srv-codex/repos")
+TUI_SESSION_NAME = "autopilot-deck"
+LIVE_SESSION_NAME = "codex-live"
+
+def get_next_task_id():
+    existing = glob.glob(str(TASKS_DIR / "*.yaml")) + glob.glob(str(TASKS_DIR / "*.yml")) + glob.glob(str(TASKS_DIR / "*.json"))
+    nums = []
+    for f in existing:
+        base = Path(f).name.split(".")[0].split("-")[0]
+        if base.isdigit():
+            nums.append(int(base))
+    return f"{(max(nums) + 1 if nums else 1):03d}"
+
+def cmd_queue(args):
+    prompt_text = " ".join(args.prompt).strip()
+    if not prompt_text:
+        print("Error: Prompt cannot be empty. Usage: autopilot queue <prompt> [-r repo] [-m model]")
+        sys.exit(1)
+    repo = args.repo
+    if not repo:
+        try:
+            cwd_repo = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL, text=True).strip()
+            repo = Path(cwd_repo).name
+        except Exception:
+            repo = "codex-autonomous-worker"
+    task_id = get_next_task_id()
+    filename = f"{task_id}-{args.type}.yaml"
+    task_file = TASKS_DIR / filename
+    data = {
+        "id": task_id,
+        "repo": repo,
+        "type": args.type,
+        "mode": getattr(args, "mode", "continuous"),
+        "iterations": getattr(args, "iterations", 20),
+        "priority": args.priority,
+        "status": "pending",
+        "model": args.model if args.model else "agentrouter/deepseek-v4-flash",
+        "prompt": prompt_text
+    }
+    with open(task_file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False)
+    print(f"[32m✔ Autonomous campaign #{task_id} queued for {repo} ({data['mode']} loop):[0m")
+    print(f"  Objective: {prompt_text}")
+    print(f"  Model:     {data['model']}")
+    print(f"  Budget:    {data['iterations']} iterations")
+    print('Launch autopilot to open the split control surface.')
+    print('Launch autopilot to open the split control surface.')
+
+def cmd_tui(args=None):
+    sidebar_script = Path(__file__).resolve().parent / "sidebar.py"
+    if not sidebar_script.exists():
+        sidebar_script = Path("/home/ubuntu/codex-worker/sidebar.py")
+
+    res = subprocess.run(["tmux", "has-session", "-t", TUI_SESSION_NAME], capture_output=True)
+    if res.returncode != 0:
+        subprocess.run(["tmux", "new-session", "-d", "-s", TUI_SESSION_NAME, "-n", "main"], capture_output=True)
+        # Split horizontally: Left pane ~42% width, Right pane ~58% width
+        subprocess.run(["tmux", "split-window", "-h", "-t", f"{TUI_SESSION_NAME}:0", "-p", "58"], capture_output=True)
+        subprocess.run(["tmux", "set-option", "-t", TUI_SESSION_NAME, "status-style", "bg=#181825,fg=#cdd6f4"], capture_output=True)
+        subprocess.run(["tmux", "set-option", "-t", TUI_SESSION_NAME, "pane-border-style", "fg=#313244"], capture_output=True)
+        subprocess.run(["tmux", "set-option", "-t", TUI_SESSION_NAME, "pane-active-border-style", "fg=#89b4fa"], capture_output=True)
+        subprocess.run(["tmux", "set-option", "-t", TUI_SESSION_NAME, "mouse", "on"], capture_output=True)
+        
+        # Navigation shortcuts
+        subprocess.run(["tmux", "bind-key", "-t", TUI_SESSION_NAME, "-n", "F6", "select-pane", "-t", ":.+"], capture_output=True)
+        subprocess.run(["tmux", "bind-key", "-t", TUI_SESSION_NAME, "-n", "M-Left", "select-pane", "-t", "0"], capture_output=True)
+        subprocess.run(["tmux", "bind-key", "-t", TUI_SESSION_NAME, "-n", "M-Right", "select-pane", "-t", "1"], capture_output=True)
+        subprocess.run(["tmux", "bind-key", "-t", TUI_SESSION_NAME, "-n", "C-w", "select-pane", "-t", ":.+"], capture_output=True)
+
+        # Launch sidebar on left pane (0)
+        subprocess.run(["tmux", "send-keys", "-t", f"{TUI_SESSION_NAME}:0.0", f"python3 {sidebar_script}", "C-m"], capture_output=True)
+
+        # Right pane (1) shows live session or welcome card
+        live_check = subprocess.run(["tmux", "has-session", "-t", LIVE_SESSION_NAME], capture_output=True)
+        if live_check.returncode == 0:
+            subprocess.run(["tmux", "send-keys", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {LIVE_SESSION_NAME}", "C-m"], capture_output=True)
+        else:
+            welcome_cmd = "echo '=== Autopilot Control Deck ==='; echo 'Left pane: select campaigns and view progress.'; echo 'Press [Enter] on a running campaign to talk to the agent live.'; echo 'Press [F6], [Alt-Left], or click the sidebar to switch back.'; echo ''; echo 'Queue a new campaign with [n] or run: autopilot queue "<prompt>"'"
+            subprocess.run(["tmux", "send-keys", "-t", f"{TUI_SESSION_NAME}:0.1", welcome_cmd, "C-m"], capture_output=True)
+
+    subprocess.run(["tmux", "attach", "-t", TUI_SESSION_NAME])
+
+def cmd_list(args):
+    print("[1m=== Active & Queued Autonomous Campaigns ===[0m")
+    files = sorted(TASKS_DIR.glob("*"))
+    if not files:
+        print("  (Queue is empty)")
+    for f in files:
+        status = "pending"
+        for s in ["claimed", "done", "failed"]:
+            if f".{s}." in f.name or f.name.endswith(f".{s}.yaml"):
+                status = s
+        color = "[33m" if status == "claimed" else ("[32m" if status == "done" else ("[31m" if status == "failed" else "[36m"))
+        print(f"  {color}[{status.upper()}][0m {f.name}")
+
+def cmd_current(args):
+    current_file = STATE_DIR / "current.json"
+    if current_file.exists():
+        try:
+            data = json.loads(current_file.read_text())
+            print("[1;32mCurrently Active Autonomous Campaign:[0m")
+            for k, v in data.items():
+                print(f"  {k}: {v}")
+            print('Launch autopilot to enter the live control surface.')
+            return
+        except Exception:
+            pass
+    print("No autonomous campaign currently executing.")
+
+def cmd_history(args):
+    hist_file = STATE_DIR / "history.jsonl"
+    if not hist_file.exists():
+        print("No history recorded yet.")
+        return
+    print("[1m=== Recent Campaign History ===[0m")
+    with open(hist_file, "r") as f:
+        lines = f.readlines()
+        for l in lines[-args.n:]:
+            item = json.loads(l)
+            status_color = "[32m" if item.get("status") == "completed" else "[31m"
+            print(f"  Campaign #{item.get('task')} [{item.get('repo')}] -> {status_color}{item.get('status')}[0m ({item.get('model')})")
+            if item.get("notes"):
+                print(f"    Notes: {', '.join(item['notes'])}")
+
+def cmd_logs(args):
+    if args.last:
+        logs = sorted(LOGS_DIR.glob("codex_*.log"), key=os.path.getmtime)
+        if not logs:
+            print("No execution logs found.")
+            return
+        target = logs[-1]
+        print(f"[1mShowing latest campaign execution log ({target.name}):[0m")
+        if args.follow:
+            subprocess.run(["tail", "-f", str(target)])
+        else:
+            subprocess.run(["tail", f"-n{args.lines}", str(target)])
+    else:
+        worker_log = LOGS_DIR / "worker.log"
+        if not worker_log.exists():
+            print("Worker log not found.")
+            return
+        if args.follow:
+            subprocess.run(["tail", "-f", str(worker_log)])
+        else:
+            subprocess.run(["tail", f"-n{args.lines}", str(worker_log)])
+
+def main():
+    if len(sys.argv) == 1:
+        cmd_tui()
+        return
+
+    KNOWN_COMMANDS = {"tui", "queue", "run", "add", "list", "current", "history", "logs", "-h", "--help"}
+    if len(sys.argv) > 1 and sys.argv[1] not in KNOWN_COMMANDS:
+        sys.argv.insert(1, "queue")
+
+    parser = argparse.ArgumentParser(description="Autopilot 24/7 Autonomous Engineering Daemon", prog="autopilot")
+    sub = parser.add_subparsers(dest="command")
+
+    sub.add_parser("tui", help="Launch the split-screen TUI control deck")
+
+    p_queue = sub.add_parser("queue", help="Queue a new 24/7 autonomous engineering campaign")
+    p_queue.add_argument("prompt", nargs="+", help="Objective for the autonomous worker")
+    p_queue.add_argument("-r", "--repo", default=None, help="Target repository name")
+    p_queue.add_argument("-m", "--model", default=None, help="Model override")
+    p_queue.add_argument("-t", "--type", default="feature", help="Campaign type (bugfix, feature, chore, test)")
+    p_queue.add_argument("--mode", default="continuous", choices=["single", "continuous"], help="Execution mode")
+    p_queue.add_argument("--iterations", type=int, default=20, help="Max iterations for continuous loop")
+    p_queue.add_argument("-p", "--priority", default="high", choices=["low", "medium", "high"])
+
+    sub.add_parser("list", help="List all campaigns in queue")
+    sub.add_parser("current", help="Show currently running campaign details")
+
+    p_hist = sub.add_parser("history", help="Show completed campaigns history")
+    p_hist.add_argument("-n", type=int, default=10, help="Number of records to show")
+
+    p_logs = sub.add_parser("logs", help="View supervisor daemon or execution logs")
+    p_logs.add_argument("-f", "--follow", action="store_true", help="Follow log stream")
+    p_logs.add_argument("-n", "--lines", type=int, default=30, help="Number of lines")
+    p_logs.add_argument("--last", action="store_true", help="View the most recent task execution log")
+
+    args = parser.parse_args()
+
+    if args.command == "tui":
+        cmd_tui(args)
+    elif args.command in ["queue", "run", "add"]:
+        cmd_queue(args)
+    elif args.command == "list":
+        cmd_list(args)
+    elif args.command == "current":
+        cmd_current(args)
+    elif args.command == "history":
+        cmd_history(args)
+    elif args.command == "logs":
+        cmd_logs(args)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

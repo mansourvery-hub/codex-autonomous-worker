@@ -230,6 +230,13 @@ def run_codex_job(worktree_path, full_prompt, model, timeout_secs, mode="continu
                         logger.info(f"Checkpoint commit saved for iteration {current_iteration}")
 
                     current_iteration += 1
+                    try:
+                        cur_data = json.loads(CURRENT_FILE.read_text()) if CURRENT_FILE.exists() else {}
+                        cur_data["iteration"] = current_iteration
+                        cur_data["last_checkpoint"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                        CURRENT_FILE.write_text(json.dumps(cur_data, indent=2))
+                    except Exception:
+                        pass
                     directive = (
                         f"[Supervisor Heartbeat - Iteration #{current_iteration}/{max_iterations}] "
                         f"Checkpoint recorded. Proceed with systematic workflow: "
