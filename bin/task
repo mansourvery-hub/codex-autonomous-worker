@@ -111,6 +111,36 @@ def cmd_attach(args):
     else:
         print("No agent is currently executing. Use 'task logs --last' to see previous run, or 'task resume' to open Codex TUI.")
 
+def cmd_steer(args):
+    msg = " ".join(args.message).strip()
+    if not msg:
+        print("Usage: task steer <message>")
+        return
+    current_file = STATE_DIR / "current.json"
+    if not current_file.exists():
+        print("No task currently executing to steer.")
+        return
+    # Find active session id from latest log
+    logs = sorted(LOGS_DIR.glob("codex_exec_*.log"), key=os.path.getmtime)
+    if not logs:
+        print("No log file found.")
+        return
+    import re
+    log_content = logs[-1].read_text(errors="ignore")
+    # Clean ANSI codes
+    clean_text = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
+    m = re.search(r'session id:\s*([a-f0-9\-]+)', clean_text)
+    if not m:
+        print("Could not find active session ID in log.")
+        return
+    session_id = m.group(1).strip()
+    print(f"[32mSending steering instruction to session {session_id}...[0m")
+    res = subprocess.run(["codex", "queue", "--thread", session_id, "--message", msg], capture_output=True, text=True)
+    if res.returncode == 0:
+        print(f"[32m✔ Injected successfully:[0m {msg}")
+    else:
+        print(f"[31mError queueing message:[0m {res.stderr}")
+
 def cmd_resume(args):
     print("[32mOpening previous agent session in interactive Codex TUI...[0m")
     subprocess.run(["codex", "resume", "--include-non-interactive", "--last"])
@@ -138,7 +168,7 @@ def cmd_logs(args):
             subprocess.run(["tail", f"-n{args.lines}", str(worker_log)])
 
 def main():
-    KNOWN_COMMANDS = {"add", "list", "current", "history", "logs", "attach", "resume", "-h", "--help"}
+    KNOWN_COMMANDS = {"add", "list", "current", "history", "logs", "attach", "resume", "steer", "-h", "--help"}
     if len(sys.argv) > 1 and sys.argv[1] not in KNOWN_COMMANDS:
         sys.argv.insert(1, "add")
 
@@ -154,6 +184,9 @@ def main():
 
     sub.add_parser("attach", help="Attach live to running agent TUI session")
     sub.add_parser("resume", help="Resume previous interactive session in Codex TUI")
+    p_steer = sub.add_parser("steer", help="Send a live steering instruction to the running agent")
+    p_steer.add_argument("message", nargs="+", help="Steering message/correction for the agent")
+
     sub.add_parser("list", help="List all tasks in queue")
     sub.add_parser("current", help="Show currently running task details")
 
@@ -177,6 +210,8 @@ def main():
         cmd_history(args)
     elif args.command == "attach":
         cmd_attach(args)
+    elif args.command == "steer":
+        cmd_steer(args)
     elif args.command == "resume":
         cmd_resume(args)
     elif args.command == "logs":
