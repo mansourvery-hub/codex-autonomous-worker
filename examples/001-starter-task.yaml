@@ -1,0 +1,12 @@
+id: '001'
+priority: medium
+prompt: 'Inspect the repository README.md and pubspec.yaml to verify the project name
+  and version.
+
+  Report the findings in the task summary.
+
+  '
+repo: chess-repertoire-srs
+status: done
+type: bugfix
+updated_at: '2026-10-06T21:47:40.427925+00:00'
