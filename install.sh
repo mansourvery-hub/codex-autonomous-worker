@@ -37,6 +37,10 @@ cp prompts/task_prompt.md "$INSTALL_DIR/task_prompt.md"
 echo "[3/6] Installing 'task' CLI into $BIN_DIR/task..."
 cp bin/task "$BIN_DIR/task"
 chmod +x "$BIN_DIR/task"
+cp bin/sidebar.py "$BIN_DIR/sidebar.py"
+chmod +x "$BIN_DIR/sidebar.py"
+cp bin/sidebar.py "$INSTALL_DIR/sidebar.py"
+chmod +x "$INSTALL_DIR/sidebar.py"
 
 # 4. Prepare systemd unit files with current user paths
 echo "[4/6] Generating systemd unit definitions..."

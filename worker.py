@@ -149,7 +149,7 @@ def cleanup_worktree(repo_path, worktree_path):
     except Exception as e:
         logger.warning(f"Error cleaning up worktree {worktree_path}: {e}")
 
-def run_codex_job(worktree_path, full_prompt, model, timeout_secs):
+def run_codex_job(worktree_path, full_prompt, model, timeout_secs, mode="continuous", max_iterations=15):
     task_log_file = LOGS_DIR / f"codex_live_{int(time.time())}.log"
     cliproxy_info = CONFIG.get("cliproxy", {})
     cliproxy_url = cliproxy_info.get("url", "http://127.0.0.1:8317/v1")
@@ -194,6 +194,7 @@ def run_codex_job(worktree_path, full_prompt, model, timeout_secs):
     subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, codex_cmd, "C-m"])
 
     # Monitor session
+    current_iteration = 1
     consecutive_idle_seconds = 0
     while time.time() - start_time < timeout_secs:
         # Check if tmux session still exists
@@ -218,17 +219,34 @@ def run_codex_job(worktree_path, full_prompt, model, timeout_secs):
             # Human is actively attached in TUI — never auto-close while human is interacting!
             consecutive_idle_seconds = 0
         elif not is_working and ("Ask Codex to do anything" in pane_text or "›" in pane_text):
-            # Agent has completed its turn and is idle at prompt, with no human attached
             consecutive_idle_seconds += 2
             if consecutive_idle_seconds >= idle_limit:
-                logger.info(f"Agent finished work and remained idle for {idle_limit}s with no human attached. Concluding session...")
-                # Gracefully exit Codex: Ctrl-C then Ctrl-D
-                subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-c"])
-                time.sleep(0.5)
-                subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-d"])
-                time.sleep(1.5)
-                subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION_NAME], capture_output=True)
-                break
+                if mode == "continuous" and current_iteration < max_iterations:
+                    logger.info(f"Iteration {current_iteration} complete. Checkpointing and injecting heartbeat directive #{current_iteration + 1}...")
+                    diff_proc = subprocess.run(["git", "-C", str(worktree_path), "status", "--porcelain"], capture_output=True, text=True)
+                    if diff_proc.stdout.strip():
+                        subprocess.run(["git", "-C", str(worktree_path), "add", "-A"], capture_output=True)
+                        subprocess.run(["git", "-C", str(worktree_path), "commit", "-m", f"checkpoint(agent): iteration {current_iteration} autonomous progress"], capture_output=True)
+                        logger.info(f"Checkpoint commit saved for iteration {current_iteration}")
+
+                    current_iteration += 1
+                    directive = (
+                        f"[Supervisor Heartbeat - Iteration #{current_iteration}/{max_iterations}] "
+                        f"Checkpoint recorded. Proceed with systematic workflow: "
+                        f"check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete."
+                    )
+                    subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, directive, "C-m"])
+                    consecutive_idle_seconds = 0
+                    time.sleep(3)
+                    continue
+                else:
+                    logger.info(f"Autonomous session concluding (iteration {current_iteration}/{max_iterations} or idle limit reached)...")
+                    subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-c"])
+                    time.sleep(0.5)
+                    subprocess.run(["tmux", "send-keys", "-t", TMUX_SESSION_NAME, "C-d"])
+                    time.sleep(1.5)
+                    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION_NAME], capture_output=True)
+                    break
         else:
             consecutive_idle_seconds = 0
 
@@ -253,6 +271,8 @@ def execute_task(task_file, task_data):
     repo_name = task_data.get("repo")
     prompt = task_data.get("prompt", "")
     model = task_data.get("model", CONFIG.get("default_model", "gemini-3.5-flash-lite"))
+    mode = task_data.get("mode", "continuous")
+    max_iterations = int(task_data.get("iterations", task_data.get("max_iterations", 15)))
     branch_name = f"agent/task-{task_id}-{int(time.time())}"
     worktree_path = WORKTREES_DIR / f"task-{task_id}"
 
@@ -290,8 +310,8 @@ def execute_task(task_file, task_data):
         logger.error(f"Worktree setup failed: {e}")
         return False, f"worktree_setup_failed: {e}"
 
-    timeout = task_data.get("timeout_seconds", CONFIG.get("task_timeout_seconds", 3600))
-    success, reason, log_path = run_codex_job(worktree_path, full_prompt, model, timeout)
+    timeout = task_data.get("timeout_seconds", CONFIG.get("task_timeout_seconds", 7200))
+    success, reason, log_path = run_codex_job(worktree_path, full_prompt, model, timeout, mode=mode, max_iterations=max_iterations)
 
     diff_proc = subprocess.run(["git", "-C", str(worktree_path), "status", "--porcelain"], capture_output=True, text=True)
     has_changes = bool(diff_proc.stdout.strip())
