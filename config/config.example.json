@@ -1,0 +1,22 @@
+{
+  "base_dir": "/home/ubuntu/srv-codex",
+  "repos_dir": "/home/ubuntu/srv-codex/repos",
+  "worktrees_dir": "/home/ubuntu/srv-codex/worktrees",
+  "tasks_dir": "/home/ubuntu/srv-codex/tasks",
+  "state_dir": "/home/ubuntu/srv-codex/state",
+  "logs_dir": "/home/ubuntu/srv-codex/logs",
+  "task_timeout_seconds": 3600,
+  "poll_interval_seconds": 15,
+  "rate_limit_backoff_seconds": 300,
+  "max_consecutive_failures": 5,
+  "default_model": "agentrouter/deepseek-v4-flash",
+  "cliproxy": {
+    "url": "http://127.0.0.1:8317/v1",
+    "check_health": true,
+    "catalog_json": "/home/ubuntu/.codex/model-catalogs/gateway.json"
+  },
+  "git": {
+    "author_name": "Codex Autonomous Worker",
+    "author_email": "codex-worker@localhost"
+  }
+}
