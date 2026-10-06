@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.status
+.agent_prompt.txt
+.run_agent.sh
+
