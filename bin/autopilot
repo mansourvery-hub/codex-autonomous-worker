@@ -89,7 +89,7 @@ def cmd_tui(args=None):
         if live_check.returncode == 0:
             subprocess.run(["tmux", "send-keys", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {LIVE_SESSION_NAME}", "C-m"], capture_output=True)
         else:
-            welcome_cmd = "echo '=== Autopilot Control Deck ==='; echo 'Left pane: select campaigns and view progress.'; echo 'Press [Enter] on a running campaign to talk to the agent live.'; echo 'Press [F6], [Alt-Left], or click the sidebar to switch back.'; echo ''; echo 'Queue a new campaign with [n] or run: autopilot queue "<prompt>"'"
+            welcome_cmd = "echo '=== Autopilot Control Deck ==='; echo 'Left pane: select campaigns and view progress.'; echo 'Press [Enter] on a running campaign to talk to the agent live.'; echo 'Press [F6], [Alt-Left], or click the sidebar to switch back.'; echo ''; echo 'Queue a new campaign with [n] or run: autopilot queue <prompt>'"
             subprocess.run(["tmux", "send-keys", "-t", f"{TUI_SESSION_NAME}:0.1", welcome_cmd, "C-m"], capture_output=True)
 
     subprocess.run(["tmux", "attach", "-t", TUI_SESSION_NAME])

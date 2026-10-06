@@ -24,8 +24,12 @@ jobs:
 
       - name: Compile Python scripts
         run: |
-          python3 -m py_compile worker.py bin/task
+          python3 -m py_compile worker.py bin/autopilot bin/sidebar.py bin/task
 
       - name: Check shell scripts
         run: |
           bash -n install.sh
+
+      - name: Run test suite
+        run: |
+          python3 -m unittest discover -s tests -p "test_*.py" -v
