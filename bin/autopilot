@@ -94,6 +94,33 @@ def cmd_tui(args=None):
 
     subprocess.run(["tmux", "attach", "-t", TUI_SESSION_NAME])
 
+def cmd_loop(args):
+    prompt_list = args.prompt if isinstance(args.prompt, list) and args.prompt else ["Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively"]
+    prompt_text = " ".join(prompt_list).strip()
+    repo = args.repo or "chess-repertoire-srs"
+    task_id = get_next_task_id()
+    filename = f"{task_id}-campaign.yaml"
+    task_file = TASKS_DIR / filename
+    data = {
+        "id": task_id,
+        "repo": repo,
+        "type": "feature",
+        "mode": "continuous",
+        "iterations": getattr(args, "iterations", 30),
+        "priority": "high",
+        "status": "pending",
+        "model": args.model if args.model else "agentrouter/deepseek-v4-flash",
+        "prompt": prompt_text
+    }
+    with open(task_file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False)
+    print(f"[32m✔ Launched 24/7 Autonomous Campaign #{task_id} for {repo}[0m")
+    print(f"  Objective: {prompt_text}")
+    print(f"  Budget:    {data['iterations']} iterations")
+    print("Opening Autopilot Control Deck...")
+    time.sleep(1)
+    cmd_tui()
+
 def cmd_list(args):
     print("[1m=== Active & Queued Autonomous Campaigns ===[0m")
     files = sorted(TASKS_DIR.glob("*"))
@@ -163,7 +190,7 @@ def main():
         cmd_tui()
         return
 
-    KNOWN_COMMANDS = {"tui", "queue", "run", "add", "list", "current", "history", "logs", "-h", "--help"}
+    KNOWN_COMMANDS = {"tui", "loop", "queue", "run", "add", "list", "current", "history", "logs", "-h", "--help"}
     if len(sys.argv) > 1 and sys.argv[1] not in KNOWN_COMMANDS:
         sys.argv.insert(1, "queue")
 
@@ -171,6 +198,13 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("tui", help="Launch the split-screen TUI control deck")
+
+    p_loop = sub.add_parser("loop", help="Launch a 24/7 autonomous loop campaign and open the deck")
+    p_loop.add_argument("prompt", nargs="*", default=["Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively"], help="Objective for the campaign")
+    p_loop.add_argument("-r", "--repo", default="chess-repertoire-srs", help="Target repository name")
+    p_loop.add_argument("-m", "--model", default=None, help="Model override")
+    p_loop.add_argument("--iterations", type=int, default=30, help="Max iterations for continuous loop")
+
 
     p_queue = sub.add_parser("queue", help="Queue a new 24/7 autonomous engineering campaign")
     p_queue.add_argument("prompt", nargs="+", help="Objective for the autonomous worker")
@@ -196,6 +230,8 @@ def main():
 
     if args.command == "tui":
         cmd_tui(args)
+    elif args.command == "loop":
+        cmd_loop(args)
     elif args.command in ["queue", "run", "add"]:
         cmd_queue(args)
     elif args.command == "list":

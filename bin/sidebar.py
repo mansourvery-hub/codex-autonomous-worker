@@ -28,6 +28,18 @@ def format_duration(seconds):
     rem_min = minutes % 60
     return f"{hours}h {rem_min:02d}m"
 
+def get_available_repos():
+    projects_dir = Path("/home/ubuntu/github-projects")
+    repos = []
+    if projects_dir.exists():
+        for d in sorted(projects_dir.iterdir()):
+            if d.is_dir() and (d / ".git").exists():
+                repos.append(d.name)
+    if "chess-repertoire-srs" in repos:
+        repos.remove("chess-repertoire-srs")
+        repos.insert(0, "chess-repertoire-srs")
+    return repos or ["chess-repertoire-srs"]
+
 def get_tasks():
     task_files = sorted(list(TASKS_DIR.glob("*.yaml")) + list(TASKS_DIR.glob("*.yml")) + list(TASKS_DIR.glob("*.json")))
     current_data = {}
@@ -69,7 +81,7 @@ def get_tasks():
             "iteration": current_data.get("iteration", 1) if is_active else data.get("iterations", 15),
             "max_iterations": data.get("iterations", 15),
             "branch": current_data.get("branch", f"agent/task-{task_id}") if is_active else f"agent/task-{task_id}",
-            "model": data.get("model", "deepseek-v4"),
+            "model": data.get("model", "agentrouter/deepseek-v4-flash"),
             "prompt": data.get("prompt", p.stem).strip(),
             "age": age_str,
             "file": p
@@ -150,51 +162,80 @@ def action_select_task(task):
                 info_cmd = f"sh -c 'echo Campaign #{task_id} completed.; echo No session file recorded.; echo; read -p Press enter to close...'"
                 subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
     else:
-        info_cmd = f"sh -c 'echo === Campaign #{task_id} [QUEUED] ===; echo Standing by for autonomous daemon...; sleep 10'"
+        info_cmd = f"sh -c 'echo === Campaign #{task_id} [QUEUED] ===; echo Repo: {task.get("repo", "unknown")}; echo Standing by for autonomous daemon...; sleep 10'"
         subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
 
 def preview_task(task):
     status = task["status"]
     task_id = task["id"]
     if status in ["running", "claimed"]:
-        # Attach to live stream
         subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
     elif status in ["done", "failed"]:
         log_f = find_task_log(task_id)
         if log_f:
-            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"tail -n 80 -f {log_f}"], capture_output=True)
+            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"tail -n 80 '{log_f}'"], capture_output=True)
 
-def modal_input(stdscr, title, prompt_label):
+def modal_input(stdscr, title, prompt_label, default_text=""):
     h, w = stdscr.getmaxyx()
-    curses.echo()
     curses.curs_set(1)
     stdscr.nodelay(False)
 
-    box_h = 5
-    box_w = max(25, min(w - 4, 60))
-    start_y = max(1, h // 2 - 2)
+    box_h = 7
+    box_w = max(40, min(w - 6, 75))
+    start_y = max(1, (h - box_h) // 2)
     start_x = max(1, (w - box_w) // 2)
 
     win = curses.newwin(box_h, box_w, start_y, start_x)
-    win.box()
-    win.addstr(1, 2, f" {title} "[:box_w - 4], curses.A_BOLD)
-    win.addstr(2, 2, f"{prompt_label}: "[:box_w - 4])
-    win.refresh()
+    win.keypad(True)
+    buffer = list(default_text)
+    cursor_pos = len(buffer)
 
-    user_input = ""
-    try:
-        user_input = win.getstr(3, 2, box_w - 6).decode("utf-8").strip()
-    except Exception:
-        pass
+    while True:
+        win.erase()
+        win.box()
+        # Title
+        win.addstr(1, 2, f" {title} "[:box_w - 4], curses.color_pair(3) | curses.A_BOLD)
+        # Prompt label
+        win.addstr(2, 2, f"{prompt_label}:"[:box_w - 4], curses.color_pair(6))
+        # Input box display
+        visible_text = "".join(buffer)
+        max_field_w = box_w - 6
+        display_text = visible_text[-max_field_w:] if len(visible_text) > max_field_w else visible_text
+        win.addstr(3, 3, display_text, curses.color_pair(5))
+        # Hint footer
+        win.addstr(5, 2, "[Enter] Confirm  [Esc] Cancel"[:box_w - 4], curses.color_pair(3))
 
-    curses.noecho()
-    curses.curs_set(0)
-    stdscr.nodelay(True)
-    return user_input
+        cursor_x = 3 + min(cursor_pos, max_field_w)
+        win.move(3, cursor_x)
+        win.refresh()
 
-def queue_new_campaign(prompt_text):
+        ch = win.getch()
+        if ch == 27:  # ESCAPE -> Cancel immediately
+            curses.curs_set(0)
+            stdscr.nodelay(True)
+            return None
+        elif ch in [10, 13, curses.KEY_ENTER]:
+            curses.curs_set(0)
+            stdscr.nodelay(True)
+            return "".join(buffer).strip()
+        elif ch in [curses.KEY_BACKSPACE, 127, 8]:
+            if cursor_pos > 0:
+                buffer.pop(cursor_pos - 1)
+                cursor_pos -= 1
+        elif ch == curses.KEY_DC:
+            if cursor_pos < len(buffer):
+                buffer.pop(cursor_pos)
+        elif ch == curses.KEY_LEFT:
+            cursor_pos = max(0, cursor_pos - 1)
+        elif ch == curses.KEY_RIGHT:
+            cursor_pos = min(len(buffer), cursor_pos + 1)
+        elif 32 <= ch <= 126:
+            buffer.insert(cursor_pos, chr(ch))
+            cursor_pos += 1
+
+def queue_new_campaign(repo_name, prompt_text, iterations=30):
     if not prompt_text:
-        return
+        return None
     existing = glob.glob(str(TASKS_DIR / "*.yaml")) + glob.glob(str(TASKS_DIR / "*.json"))
     nums = []
     for f in existing:
@@ -206,10 +247,10 @@ def queue_new_campaign(prompt_text):
     task_file = TASKS_DIR / filename
     data = {
         "id": task_id,
-        "repo": "codex-autonomous-worker",
+        "repo": repo_name,
         "type": "feature",
         "mode": "continuous",
-        "iterations": 20,
+        "iterations": iterations,
         "priority": "high",
         "status": "pending",
         "model": "agentrouter/deepseek-v4-flash",
@@ -217,6 +258,7 @@ def queue_new_campaign(prompt_text):
     }
     with open(task_file, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
+    return task_id
 
 def main(stdscr):
     curses.start_color()
@@ -265,7 +307,6 @@ def main(stdscr):
         stdscr.addstr(3, 0, ("─" * (w - 1))[:w], curses.color_pair(3))
 
         # 2. Rich Multi-Line Card Area
-        # Each card takes 3 lines + 1 separator = 4 lines total
         card_height = 4
         start_y = 4
         available_height = max(4, h - 8)
@@ -274,8 +315,8 @@ def main(stdscr):
         scroll_offset = max(0, selected_idx - max_visible_cards + 1) if selected_idx >= max_visible_cards else 0
 
         if not tasks:
-            stdscr.addstr(start_y + 1, 2, "No autonomous campaigns active.", curses.color_pair(6))
-            stdscr.addstr(start_y + 2, 2, "Press [n] to launch a new 24/7 campaign.", curses.color_pair(3))
+            stdscr.addstr(start_y + 1, 2, "No autonomous campaigns in queue.", curses.color_pair(6))
+            stdscr.addstr(start_y + 2, 2, "Press [n] to launch a 24/7 loop campaign.", curses.color_pair(3))
         else:
             for i in range(max_visible_cards):
                 t_idx = scroll_offset + i
@@ -285,7 +326,6 @@ def main(stdscr):
                 is_sel = (t_idx == selected_idx)
                 card_y = start_y + (i * card_height)
 
-                # Determine status pill
                 if t["status"] == "running":
                     pill = "[● WORKING]"
                     p_color = curses.color_pair(1) | curses.A_BOLD
@@ -304,7 +344,7 @@ def main(stdscr):
 
                 prefix = "▸ " if is_sel else "  "
 
-                # Line 1: Header row: Pill + Task ID + Age
+                # Line 1: Header: Pill + Task ID + Age
                 l1 = f"{prefix}{pill} #{t['id']} · {t['age']}"
                 if is_sel:
                     stdscr.addstr(card_y, 0, l1[:w].ljust(w), curses.color_pair(5) | curses.A_BOLD)
@@ -318,14 +358,14 @@ def main(stdscr):
                 l2 = f"    {t['prompt']}"
                 stdscr.addstr(card_y + 1, 0, l2[:w].ljust(w) if is_sel else l2[:w], curses.color_pair(6) | (curses.A_BOLD if is_sel else 0))
 
-                # Line 3: Repo + Context + Loop metrics
+                # Line 3: Repo + Branch / Loop progress
                 if t["status"] == "running":
                     l3 = f"    {t['repo']} · {t['branch']} · Iter #{t['iteration']}/{t['max_iterations']}"
                 else:
                     l3 = f"    {t['repo']} · {t['model']} · {t['mode']} loop"
                 stdscr.addstr(card_y + 2, 0, l3[:w].ljust(w) if is_sel else l3[:w], curses.color_pair(3))
 
-                # Line 4: Subtle separator between cards
+                # Line 4: Separator
                 stdscr.addstr(card_y + 3, 0, (" " * w) if is_sel else ("·" * min(w - 1, 30)), curses.color_pair(3))
 
         # 3. Footer Bar
@@ -335,12 +375,11 @@ def main(stdscr):
         if message and time.time() - message_time < 3:
             stdscr.addstr(footer_y + 1, 0, f"★ {message}"[:w], curses.color_pair(2) | curses.A_BOLD)
         else:
-            stdscr.addstr(footer_y + 1, 0, "[Enter] Talk / Interact with Agent"[:w], curses.color_pair(1) | curses.A_BOLD)
-            stdscr.addstr(footer_y + 2, 0, "[Tab/F6] Focus Sidebar · [n] New · [q] Detach"[:w], curses.color_pair(3))
+            stdscr.addstr(footer_y + 1, 0, "[Enter] Open Codex Session"[:w], curses.color_pair(1) | curses.A_BOLD)
+            stdscr.addstr(footer_y + 2, 0, "[Tab/F6] Focus Sidebar · [n] New 24/7 Loop · [q] Q"[:w], curses.color_pair(3))
 
         stdscr.refresh()
 
-        # Update preview in right pane if selection changed
         if tasks and selected_idx != last_previewed_idx:
             preview_task(tasks[selected_idx])
             last_previewed_idx = selected_idx
@@ -359,13 +398,23 @@ def main(stdscr):
             if tasks and selected_idx < len(tasks):
                 action_select_task(tasks[selected_idx])
         elif ch == ord('n'):
-            p_text = modal_input(stdscr, "New 24/7 Autonomous Campaign", "Objective")
-            if p_text:
-                queue_new_campaign(p_text)
-                message = "Campaign queued!"
-                message_time = time.time()
-                last_previewed_idx = -1
-        elif ch == ord('q'):
+            # Step 1: Target Repository
+            available_repos = get_available_repos()
+            default_repo = available_repos[0] if available_repos else "chess-repertoire-srs"
+            repo_choice = modal_input(stdscr, "New 24/7 Campaign [1/2]", "Target Repository", default_repo)
+            
+            if repo_choice is not None and repo_choice.strip():
+                # Step 2: Campaign Objective
+                default_prompt = "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively"
+                p_text = modal_input(stdscr, "New 24/7 Campaign [2/2]", "Campaign Objective", default_prompt)
+                
+                if p_text is not None and p_text.strip():
+                    new_id = queue_new_campaign(repo_choice.strip(), p_text.strip(), iterations=30)
+                    message = f"24/7 Campaign #{new_id} queued! Starting loop..."
+                    message_time = time.time()
+                    selected_idx = 0
+                    last_previewed_idx = -1
+        elif ch in [ord('q'), 27]: # q or Esc detaches from deck
             subprocess.run(["tmux", "detach-client"], capture_output=True)
             break
         elif ch == curses.KEY_MOUSE:
