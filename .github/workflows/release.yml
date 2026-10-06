@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Release
+        run: |
+          VERSION=${{ github.ref_name }}
+          tar -czf codex-autonomous-worker-${VERSION}.tar.gz \
+            worker.py bin/ install.sh prompts/ config/ systemd/ README.md AGENTS.md VERSION
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: codex-autonomous-worker-*.tar.gz
+          generate_release_notes: true

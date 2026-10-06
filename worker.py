@@ -311,8 +311,9 @@ def execute_task(task_file, task_data):
 
     if success:
         if has_changes:
-            subprocess.run(["git", "-C", str(worktree_path), "add", "-A"], capture_output=True)
-            subprocess.run(["git", "-C", str(worktree_path), "commit", "-m", f"fix(agent): autonomous resolution for task {task_id}"], capture_output=True)
+            add_proc = subprocess.run(["git", "-C", str(worktree_path), "add", "-A"], capture_output=True)
+            if add_proc.returncode == 0:
+                subprocess.run(["git", "-C", str(worktree_path), "commit", "-m", f"fix(agent): autonomous resolution for task {task_id}"], capture_output=True)
         record_journal(journal_entry, failure=False)
         CURRENT_FILE.unlink(missing_ok=True)
         cleanup_worktree(repo_path, worktree_path)
