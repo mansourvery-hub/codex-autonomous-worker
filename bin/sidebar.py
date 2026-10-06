@@ -79,7 +79,35 @@ def get_tasks():
     tasks.sort(key=lambda t: (order.get(t["status"], 5), t["id"]))
     return tasks, current_data
 
+def find_session_for_task(task_id):
+    sessions_dir = Path("/home/ubuntu/.codex/sessions")
+    if not sessions_dir.exists():
+        return None
+    for p in sorted(sessions_dir.glob("**/*.jsonl"), reverse=True):
+        try:
+            with open(p, "r") as f:
+                first_line = f.readline()
+                if f"task-{task_id}" in first_line:
+                    data = json.loads(first_line)
+                    return data.get("payload", {}).get("session_id")
+        except Exception:
+            pass
+    return None
+
 def find_task_log(task_id):
+    hist_file = STATE_DIR / "history.jsonl"
+    if hist_file.exists():
+        try:
+            with open(hist_file, "r") as f:
+                for line in reversed(f.readlines()):
+                    entry = json.loads(line)
+                    t = str(entry.get("task", ""))
+                    if t == task_id or t == str(int(task_id)):
+                        p = Path(entry.get("log_path", ""))
+                        if p.exists():
+                            return p
+        except Exception:
+            pass
     logs = sorted(LOGS_DIR.glob(f"*{task_id}*.log"), key=os.path.getmtime)
     if not logs:
         logs = sorted(LOGS_DIR.glob("codex_*.log"), key=os.path.getmtime)
@@ -88,20 +116,41 @@ def find_task_log(task_id):
 def action_select_task(task):
     status = task["status"]
     task_id = task["id"]
+    repo_name = task.get("repo", "")
+
+    repo_dir = Path(f"/home/ubuntu/github-projects/{repo_name}")
+    if not repo_dir.exists():
+        repo_dir = Path(f"/home/ubuntu/srv-codex/repos/{repo_name}")
+        if not repo_dir.exists():
+            repo_dir = Path("/home/ubuntu/github-projects/codex-autonomous-worker")
 
     if status in ["running", "claimed"]:
         subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
         subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
     elif status in ["done", "failed"]:
-        log_f = find_task_log(task_id)
-        if log_f:
-            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"tail -n 120 -f {log_f}"], capture_output=True)
+        session_id = find_session_for_task(task_id)
+        if session_id:
+            model = task.get("model", "agentrouter/deepseek-v4-flash")
+            resume_cmd = (
+                f"codex resume {session_id} "
+                f"-C '{repo_dir}' "
+                f"-c openai_base_url='http://127.0.0.1:8317/v1' "
+                f"-c model_catalog_json='/home/ubuntu/.codex/model-catalogs/gateway.json' "
+                f"-c model='{model}' "
+                f"--dangerously-bypass-approvals-and-sandbox"
+            )
+            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", resume_cmd], capture_output=True)
+            subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
         else:
-            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"echo 'Campaign #{task_id} completed. No log file available.'"], capture_output=True)
-        subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
+            log_f = find_task_log(task_id)
+            if log_f:
+                subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"less -R +G '{log_f}'"], capture_output=True)
+                subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
+            else:
+                info_cmd = f"sh -c 'echo Campaign #{task_id} completed.; echo No session file recorded.; echo; read -p Press enter to close...'"
+                subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
     else:
-        # Pending task: show details in right pane without capturing focus
-        info_cmd = f"sh -c 'echo Campaign #{task_id} [QUEUED]; echo Standing by for autonomous daemon...; sleep 10'"
+        info_cmd = f"sh -c 'echo === Campaign #{task_id} [QUEUED] ===; echo Standing by for autonomous daemon...; sleep 10'"
         subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
 
 def preview_task(task):
