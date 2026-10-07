@@ -112,6 +112,9 @@ fn run_loop(
                             KeyCode::Char('n') => {
                                 app.open_new_campaign_modal();
                             }
+                            KeyCode::Char('x') => {
+                                app.cancel_active_campaign(workspace_h, workspace_w);
+                            }
                             KeyCode::F(6) | KeyCode::Tab => {
                                 if app.pty.is_running() {
                                     app.focused_pane = FocusedPane::Terminal;

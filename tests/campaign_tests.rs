@@ -29,7 +29,7 @@ fn test_queue_campaign_in_temp_dir() {
     let mut config = AppConfig::default();
     config.base_dir = temp_dir.path().to_path_buf();
 
-    let id = queue_campaign(&config, "test-repo", "Test objective", 15, None).expect("Queue campaign");
+    let id = queue_campaign(&config, "test-repo", "Test objective", "continuous", 15, None).expect("Queue campaign");
     assert_eq!(id, "001");
 
     let campaigns = load_all_campaigns(&config);

@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Loop { prompt, repo, model, iterations }) => {
             let prompt_text = prompt.join(" ").trim().to_string();
-            let id = queue_campaign(&config, &repo, &prompt_text, iterations, model.as_deref())?;
+            let id = queue_campaign(&config, &repo, &prompt_text, "continuous", iterations, model.as_deref())?;
             println!("[32m✔ Launched 24/7 Autonomous Campaign #{} for {}[0m", id, repo);
             println!("  Objective: {}", prompt_text);
             println!("  Budget:    {} iterations", iterations);
@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
             let repo_name = repo.unwrap_or_else(|| "chess-repertoire-srs".to_string());
-            let id = queue_campaign(&config, &repo_name, &prompt_text, iterations, model.as_deref())?;
+            let id = queue_campaign(&config, &repo_name, &prompt_text, "continuous", iterations, model.as_deref())?;
             println!("[32m✔ Autonomous campaign #{} queued for {}:[0m", id, repo_name);
             println!("  Objective: {}", prompt_text);
             println!("  Budget:    {} iterations", iterations);

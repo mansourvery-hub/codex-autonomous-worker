@@ -282,10 +282,25 @@ pub fn find_log_for_campaign(config: &AppConfig, task_id: &str) -> Option<PathBu
     logs.into_iter().next()
 }
 
+pub fn cancel_running_campaign(config: &AppConfig) -> Result<Option<String>> {
+    if let Some(curr) = load_current(config) {
+        let _ = std::process::Command::new("tmux").args(["kill-session", "-t", "codex-live"]).output();
+        let _ = fs::remove_file(config.current_file());
+        let claimed_file = config.tasks_dir().join(format!("{}-campaign.claimed.yaml", curr.task_id));
+        if claimed_file.exists() {
+            let done_file = config.tasks_dir().join(format!("{}-campaign.stopped.done.yaml", curr.task_id));
+            let _ = fs::rename(&claimed_file, done_file);
+        }
+        return Ok(Some(curr.task_id));
+    }
+    Ok(None)
+}
+
 pub fn queue_campaign(
     config: &AppConfig,
     repo: &str,
     prompt: &str,
+    mode: &str,
     iterations: u32,
     model: Option<&str>,
 ) -> Result<String> {
@@ -312,7 +327,7 @@ pub fn queue_campaign(
         repo: Some(repo.to_string()),
         prompt: Some(prompt.to_string()),
         status: Some("pending".to_string()),
-        mode: Some("continuous".to_string()),
+        mode: Some(mode.to_string()),
         iterations: Some(iterations),
         model: Some(model.unwrap_or(&config.default_model).to_string()),
         priority: Some("high".to_string()),

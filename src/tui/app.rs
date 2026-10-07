@@ -1,6 +1,9 @@
 use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crate::campaign::{find_session_for_campaign, load_all_campaigns, queue_campaign, Campaign, CampaignStatus};
+use crate::campaign::{
+    cancel_running_campaign, find_session_for_campaign, load_all_campaigns, queue_campaign,
+    Campaign, CampaignStatus,
+};
 use crate::config::AppConfig;
 use crate::tui::pty::PtySession;
 
@@ -13,7 +16,22 @@ pub enum FocusedPane {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModalStep {
     SelectRepo,
+    SelectMode,
+    SelectModel,
     EnterPrompt,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelOption {
+    pub id: &'static str,
+    pub label: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModeOption {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub iterations: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -21,16 +39,60 @@ pub struct ModalState {
     pub step: ModalStep,
     pub repos: Vec<String>,
     pub selected_repo_idx: usize,
+    pub modes: Vec<ModeOption>,
+    pub selected_mode_idx: usize,
+    pub models: Vec<ModelOption>,
+    pub selected_model_idx: usize,
     pub prompt_buffer: String,
     pub cursor_pos: usize,
 }
 
 impl ModalState {
     pub fn new(available_repos: Vec<String>) -> Self {
+        let modes = vec![
+            ModeOption {
+                id: "continuous",
+                label: "⟳ 24/7 Continuous Loop (30 iterations, test-driven)",
+                iterations: 30,
+            },
+            ModeOption {
+                id: "single",
+                label: "⊡ Single-Turn Task (1 turn quick fix)",
+                iterations: 1,
+            },
+        ];
+
+        let models = vec![
+            ModelOption {
+                id: "antigravity/gemini-3.8-flash-high",
+                label: "Gemini 3.8 Flash High (Fast, large context, recommended)",
+            },
+            ModelOption {
+                id: "agentrouter/deepseek-v4-flash",
+                label: "DeepSeek V4 Flash (Code intelligence)",
+            },
+            ModelOption {
+                id: "agentrouter/claude-opus-4-8",
+                label: "Claude Opus 4.8 (Frontier reasoning)",
+            },
+            ModelOption {
+                id: "gemini-3.5-flash-lite",
+                label: "Gemini 3.5 Flash Lite (Lightweight)",
+            },
+            ModelOption {
+                id: "codecraftapi/claude-opus-5.5",
+                label: "Claude Opus 5.5",
+            },
+        ];
+
         Self {
             step: ModalStep::SelectRepo,
             repos: available_repos,
             selected_repo_idx: 0,
+            modes,
+            selected_mode_idx: 0,
+            models,
+            selected_model_idx: 0,
             prompt_buffer: "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively".to_string(),
             cursor_pos: 0,
         }
@@ -42,6 +104,14 @@ impl ModalState {
         } else {
             &self.repos[self.selected_repo_idx % self.repos.len()]
         }
+    }
+
+    pub fn selected_mode(&self) -> &ModeOption {
+        &self.modes[self.selected_mode_idx % self.modes.len()]
+    }
+
+    pub fn selected_model(&self) -> &ModelOption {
+        &self.models[self.selected_model_idx % self.models.len()]
     }
 }
 
@@ -150,6 +220,23 @@ impl App {
         self.modal = None;
     }
 
+    pub fn cancel_active_campaign(&mut self, term_h: u16, term_w: u16) {
+        match cancel_running_campaign(&self.config) {
+            Ok(Some(id)) => {
+                self.set_message(format!("Stopped campaign #{}. Next queued task will start now.", id));
+                self.pty.kill();
+                self.refresh();
+                self.sync_pty_with_selection(term_h, term_w);
+            }
+            Ok(None) => {
+                self.set_message("No active campaign is currently executing.");
+            }
+            Err(e) => {
+                self.set_message(format!("Error cancelling campaign: {}", e));
+            }
+        }
+    }
+
     pub fn sync_pty_with_selection(&mut self, term_rows: u16, term_cols: u16) {
         let campaign = match self.selected_campaign() {
             Some(c) => c.clone(),
@@ -159,7 +246,6 @@ impl App {
             }
         };
 
-        // If this campaign is already active in PTY and child is running, keep it
         if self.pty.active_task_id.as_deref() == Some(&campaign.id) && self.pty.is_running() {
             return;
         }
@@ -206,11 +292,9 @@ impl App {
                     term_cols,
                 );
             } else {
-                // No session found, kill PTY so clean card is drawn
                 self.pty.kill();
             }
         } else {
-            // Queued / Pending task -> no PTY needed, show clean info card
             self.pty.kill();
         }
     }
@@ -233,6 +317,53 @@ impl App {
                     KeyCode::Down | KeyCode::Char('j') => {
                         if !modal.repos.is_empty() {
                             modal.selected_repo_idx = (modal.selected_repo_idx + 1) % modal.repos.len();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        modal.step = ModalStep::SelectMode;
+                    }
+                    _ => {}
+                },
+                ModalStep::SelectMode => match key.code {
+                    KeyCode::Esc => {
+                        self.modal = None;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if modal.selected_mode_idx > 0 {
+                            modal.selected_mode_idx -= 1;
+                        } else {
+                            modal.selected_mode_idx = modal.modes.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !modal.modes.is_empty() {
+                            modal.selected_mode_idx = (modal.selected_mode_idx + 1) % modal.modes.len();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Adjust default prompt if user picked single
+                        if modal.selected_mode().id == "single" {
+                            modal.prompt_buffer = "Inspect codebase and resolve open issue".to_string();
+                            modal.cursor_pos = modal.prompt_buffer.len();
+                        }
+                        modal.step = ModalStep::SelectModel;
+                    }
+                    _ => {}
+                },
+                ModalStep::SelectModel => match key.code {
+                    KeyCode::Esc => {
+                        self.modal = None;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if modal.selected_model_idx > 0 {
+                            modal.selected_model_idx -= 1;
+                        } else {
+                            modal.selected_model_idx = modal.models.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !modal.models.is_empty() {
+                            modal.selected_model_idx = (modal.selected_model_idx + 1) % modal.models.len();
                         }
                     }
                     KeyCode::Enter => {
@@ -282,11 +413,27 @@ impl App {
         if should_queue {
             if let Some(modal) = self.modal.take() {
                 let repo = modal.selected_repo().to_string();
+                let mode_opt = modal.selected_mode();
+                let model_opt = modal.selected_model();
                 let prompt = modal.prompt_buffer.trim().to_string();
+
                 if !prompt.is_empty() {
-                    match queue_campaign(&self.config, &repo, &prompt, 30, None) {
+                    match queue_campaign(
+                        &self.config,
+                        &repo,
+                        &prompt,
+                        mode_opt.id,
+                        mode_opt.iterations,
+                        Some(model_opt.id),
+                    ) {
                         Ok(id) => {
-                            self.set_message(format!("24/7 Campaign #{} queued for {}!", id, repo));
+                            self.set_message(format!(
+                                "{} #{} queued for {} [{}]!",
+                                if mode_opt.id == "continuous" { "24/7 Loop" } else { "Task" },
+                                id,
+                                repo,
+                                model_opt.id.split('/').next_back().unwrap_or(model_opt.id)
+                            ));
                             self.refresh();
                             self.selected_index = 0;
                             self.sync_pty_with_selection(term_h, term_w);
