@@ -45,7 +45,7 @@ fn draw_top_banner(frame: &mut Frame, app: &App, area: Rect) {
         Span::raw(" │ "),
         Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
         Span::raw(" │ "),
-        Span::styled(format!("Loop: {} Active · {} Queued · {} Completed", running_cnt, queued_cnt, done_cnt), Style::default().fg(Color::White)),
+        Span::styled(format!("Parallel: {} Active · {} Queued · {} Completed", running_cnt, queued_cnt, done_cnt), Style::default().fg(Color::White)),
     ]);
 
     let banner = Paragraph::new(title_line)
@@ -156,9 +156,9 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
     // Otherwise show selected campaign info card
     if let Some(c) = app.selected_campaign() {
         let (status_text, status_color) = match c.status {
-            CampaignStatus::Running => ("RUNNING (Live session ready)", Color::Green),
+            CampaignStatus::Running => ("RUNNING (Parallel session active)", Color::Green),
             CampaignStatus::Claimed => ("CLAIMED (Worktree being provisioned)", Color::Yellow),
-            CampaignStatus::Pending => ("QUEUED (Waiting for current campaign to finish)", Color::Magenta),
+            CampaignStatus::Pending => ("QUEUED (Ready for parallel execution)", Color::Magenta),
             CampaignStatus::Done => ("COMPLETED", Color::Green),
             CampaignStatus::Failed => ("FAILED", Color::Red),
         };
@@ -205,10 +205,15 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::from(Span::styled("─── Status & Details ─────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
 
         if c.status == CampaignStatus::Pending {
-            lines.push(Line::from(Span::styled("This campaign is queued waiting for the current active campaign to finish.", Style::default().fg(Color::Magenta))));
-            lines.push(Line::from(Span::styled("To stop the running campaign and start this one now, select the running task and press [x].", Style::default().fg(Color::Gray))));
+            lines.push(Line::from(Span::styled("This campaign is queued and ready for parallel execution.", Style::default().fg(Color::Magenta))));
+            lines.push(Line::from(Span::styled("The daemon executes queued campaigns concurrently in isolated worktrees.", Style::default().fg(Color::Gray))));
+        } else if c.status == CampaignStatus::Running {
+            lines.push(Line::from(Span::styled("Agent is actively executing in isolated worktree and live tmux session.", Style::default().fg(Color::Green))));
+            lines.push(Line::from(Span::styled("Press [Enter] to attach and interact live, or [x] to cancel this campaign.", Style::default().fg(Color::Cyan))));
+        } else if c.status == CampaignStatus::Claimed {
+            lines.push(Line::from(Span::styled("Campaign claimed by daemon; initializing Git worktree and agent session...", Style::default().fg(Color::Yellow))));
         } else {
-            lines.push(Line::from(Span::styled("Session recorded. Press [Enter] to open.", Style::default().fg(Color::Cyan))));
+            lines.push(Line::from(Span::styled("Session recorded. Press [Enter] to open interactive review.", Style::default().fg(Color::Cyan))));
         }
 
         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
@@ -345,7 +350,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign: Select Model for Codex ")
+                    .title(format!(" New Campaign: Select Model for {} ", modal.selected_engine().label.split('(').next().unwrap_or(modal.selected_engine().id).trim()))
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);

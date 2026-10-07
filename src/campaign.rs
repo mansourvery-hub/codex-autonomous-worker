@@ -100,6 +100,19 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
     let mut campaigns = Vec::new();
     let current = load_current(config);
 
+    let mut active_sessions = std::collections::HashSet::new();
+    if let Ok(out) = std::process::Command::new("tmux").args(["list-sessions", "-F", "#{session_name}"]).output() {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout);
+            for line in s.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    active_sessions.insert(trimmed.to_string());
+                }
+            }
+        }
+    }
+
     let entries = match fs::read_dir(&tasks_dir) {
         Ok(e) => e,
         Err(_) => return campaigns,
@@ -133,22 +146,29 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
         let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
         let task_id = stem.split('.').next().unwrap_or("").split('-').next().unwrap_or("").to_string();
 
-        let is_active = current.as_ref().map(|c| c.task_id == task_id).unwrap_or(false);
-        if is_active {
+        let task_session = format!("autopilot-{}", task_id);
+        let session_alive = active_sessions.contains(&task_session) || (task_id == "011" && active_sessions.contains("codex-live"));
+
+        if status == CampaignStatus::Claimed && session_alive {
             status = CampaignStatus::Running;
         }
 
-        let content = match fs::read_to_string(&path) {
+        let is_active = current.as_ref().map(|c| c.task_id == task_id).unwrap_or(false);
+        if is_active && status == CampaignStatus::Claimed {
+            status = CampaignStatus::Running;
+        }
+
+        let file_content = match fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => continue,
         };
 
         let raw: RawTaskFile = if path.extension().map(|e| e == "json").unwrap_or(false) {
-            serde_json::from_str(&content).unwrap_or(RawTaskFile {
+            serde_json::from_str(&file_content).unwrap_or(RawTaskFile {
                 id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
             })
         } else {
-            serde_yaml::from_str(&content).unwrap_or(RawTaskFile {
+            serde_yaml::from_str(&file_content).unwrap_or(RawTaskFile {
                 id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
             })
         };
@@ -162,11 +182,22 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
         let agent = raw.agent.unwrap_or_else(|| "codex".to_string());
         let branch = format!("agent/task-{}", id);
         let age = format_duration_ago(mtime);
-        let iteration = if is_active {
-            current.as_ref().and_then(|c| c.iteration).unwrap_or(1)
-        } else {
-            max_iterations
-        };
+
+        let mut iteration = 1;
+        let task_state_file = config.state_dir().join(format!("task-{}.json", id));
+        if task_state_file.exists() {
+            if let Ok(c) = fs::read_to_string(&task_state_file) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&c) {
+                    if let Some(it) = val.get("iteration").and_then(|i| i.as_u64()) {
+                        iteration = it as u32;
+                    }
+                }
+            }
+        } else if is_active {
+            iteration = current.as_ref().and_then(|c| c.iteration).unwrap_or(1);
+        } else if status == CampaignStatus::Done || status == CampaignStatus::Failed {
+            iteration = max_iterations;
+        }
 
         campaigns.push(Campaign {
             id,
@@ -185,15 +216,23 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
     }
 
     // Sort order: Running (0) -> Claimed (1) -> Pending (2) -> Done (3) -> Failed (4)
-    campaigns.sort_by_key(|c| {
-        let order = match c.status {
+    // Within the same status, sort descending by task ID (newest first)
+    campaigns.sort_by(|a, b| {
+        let order_a = match a.status {
             CampaignStatus::Running => 0,
             CampaignStatus::Claimed => 1,
             CampaignStatus::Pending => 2,
             CampaignStatus::Done => 3,
             CampaignStatus::Failed => 4,
         };
-        (order, c.id.clone())
+        let order_b = match b.status {
+            CampaignStatus::Running => 0,
+            CampaignStatus::Claimed => 1,
+            CampaignStatus::Pending => 2,
+            CampaignStatus::Done => 3,
+            CampaignStatus::Failed => 4,
+        };
+        order_a.cmp(&order_b).then_with(|| b.id.cmp(&a.id))
     });
 
     campaigns
@@ -286,16 +325,31 @@ pub fn find_log_for_campaign(config: &AppConfig, task_id: &str) -> Option<PathBu
     logs.into_iter().next()
 }
 
+pub fn cancel_campaign_by_id(config: &AppConfig, task_id: &str) -> Result<()> {
+    let session_name = format!("autopilot-{}", task_id);
+    let _ = std::process::Command::new("tmux").args(["kill-session", "-t", &session_name]).output();
+    let _ = std::process::Command::new("tmux").args(["kill-session", "-t", "codex-live"]).output();
+
+    let claimed_file = config.tasks_dir().join(format!("{}-campaign.claimed.yaml", task_id));
+    if claimed_file.exists() {
+        let done_file = config.tasks_dir().join(format!("{}-campaign.stopped.done.yaml", task_id));
+        let _ = fs::rename(&claimed_file, done_file);
+    }
+
+    let state_file = config.state_dir().join(format!("task-{}.json", task_id));
+    let _ = fs::remove_file(state_file);
+
+    let worktree_dir = config.worktrees_dir().join(format!("task-{}", task_id));
+    let _ = fs::remove_dir_all(&worktree_dir);
+
+    Ok(())
+}
+
 pub fn cancel_running_campaign(config: &AppConfig) -> Result<Option<String>> {
-    if let Some(curr) = load_current(config) {
-        let _ = std::process::Command::new("tmux").args(["kill-session", "-t", "codex-live"]).output();
-        let _ = fs::remove_file(config.current_file());
-        let claimed_file = config.tasks_dir().join(format!("{}-campaign.claimed.yaml", curr.task_id));
-        if claimed_file.exists() {
-            let done_file = config.tasks_dir().join(format!("{}-campaign.stopped.done.yaml", curr.task_id));
-            let _ = fs::rename(&claimed_file, done_file);
-        }
-        return Ok(Some(curr.task_id));
+    let campaigns = load_all_campaigns(config);
+    if let Some(running) = campaigns.into_iter().find(|c| c.status == CampaignStatus::Running) {
+        cancel_campaign_by_id(config, &running.id)?;
+        return Ok(Some(running.id));
     }
     Ok(None)
 }

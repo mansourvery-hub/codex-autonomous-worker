@@ -1,10 +1,11 @@
 use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::campaign::{
-    cancel_running_campaign, find_session_for_campaign, load_all_campaigns, queue_campaign,
+    find_session_for_campaign, load_all_campaigns, queue_campaign,
     Campaign, CampaignStatus,
 };
 use crate::config::AppConfig;
+use crate::models::{get_codex_models, get_opencode_models, ModelInfo};
 use crate::tui::pty::PtySession;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,8 +18,8 @@ pub enum FocusedPane {
 pub enum ModalStep {
     SelectRepo,
     SelectEngine,
-    SelectMode,
     SelectModel,
+    SelectMode,
     EnterPrompt,
 }
 
@@ -30,8 +31,8 @@ pub struct EngineOption {
 
 #[derive(Debug, Clone)]
 pub struct ModelOption {
-    pub id: &'static str,
-    pub label: &'static str,
+    pub id: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone)]
@@ -48,10 +49,10 @@ pub struct ModalState {
     pub selected_repo_idx: usize,
     pub engines: Vec<EngineOption>,
     pub selected_engine_idx: usize,
-    pub modes: Vec<ModeOption>,
-    pub selected_mode_idx: usize,
     pub models: Vec<ModelOption>,
     pub selected_model_idx: usize,
+    pub modes: Vec<ModeOption>,
+    pub selected_mode_idx: usize,
     pub prompt_buffer: String,
     pub cursor_pos: usize,
 }
@@ -82,28 +83,15 @@ impl ModalState {
             },
         ];
 
-        let models = vec![
-            ModelOption {
-                id: "antigravity/gemini-3.8-flash-high",
-                label: "Gemini 3.8 Flash High (Fast, large context, recommended)",
-            },
-            ModelOption {
-                id: "agentrouter/deepseek-v4-flash",
-                label: "DeepSeek V4 Flash (Code intelligence)",
-            },
-            ModelOption {
-                id: "agentrouter/claude-opus-4-8",
-                label: "Claude Opus 4.8 (Frontier reasoning)",
-            },
-            ModelOption {
-                id: "gemini-3.5-flash-lite",
-                label: "Gemini 3.5 Flash Lite (Lightweight)",
-            },
-            ModelOption {
-                id: "codecraftapi/claude-opus-5.5",
-                label: "Claude Opus 5.5",
-            },
-        ];
+        // Initial default models from Codex
+        let codex_models = get_codex_models();
+        let models = codex_models
+            .into_iter()
+            .map(|m| ModelOption {
+                id: m.id,
+                label: m.display_name,
+            })
+            .collect();
 
         Self {
             step: ModalStep::SelectRepo,
@@ -111,10 +99,10 @@ impl ModalState {
             selected_repo_idx: 0,
             engines,
             selected_engine_idx: 0,
-            modes,
-            selected_mode_idx: 0,
             models,
             selected_model_idx: 0,
+            modes,
+            selected_mode_idx: 0,
             prompt_buffer: "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively".to_string(),
             cursor_pos: 0,
         }
@@ -136,8 +124,26 @@ impl ModalState {
         &self.modes[self.selected_mode_idx % self.modes.len()]
     }
 
-    pub fn selected_model(&self) -> &ModelOption {
-        &self.models[self.selected_model_idx % self.models.len()]
+    pub fn selected_model(&self) -> Option<&ModelOption> {
+        self.models.get(self.selected_model_idx)
+    }
+
+    pub fn load_dynamic_models(&mut self) {
+        let engine = self.selected_engine().id;
+        let dynamic_list: Vec<ModelInfo> = if engine == "opencode" {
+            get_opencode_models()
+        } else {
+            get_codex_models()
+        };
+
+        self.models = dynamic_list
+            .into_iter()
+            .map(|m| ModelOption {
+                id: m.id,
+                label: m.display_name,
+            })
+            .collect();
+        self.selected_model_idx = 0;
     }
 }
 
@@ -246,21 +252,23 @@ impl App {
         self.modal = None;
     }
 
-    pub fn cancel_active_campaign(&mut self, term_h: u16, term_w: u16) {
-        match cancel_running_campaign(&self.config) {
-            Ok(Some(id)) => {
-                self.set_message(format!("Stopped campaign #{}. Next queued task will start now.", id));
-                self.pty.kill();
-                self.refresh();
-                self.sync_pty_with_selection(term_h, term_w);
-            }
-            Ok(None) => {
-                self.set_message("No active campaign is currently executing.");
-            }
-            Err(e) => {
-                self.set_message(format!("Error cancelling campaign: {}", e));
-            }
+    pub fn cancel_selected_campaign(&mut self, term_h: u16, term_w: u16) {
+        let campaign = match self.selected_campaign() {
+            Some(c) => c.clone(),
+            None => return,
+        };
+
+        if campaign.status != CampaignStatus::Running && campaign.status != CampaignStatus::Claimed {
+            self.set_message(format!("Campaign #{} is not currently running.", campaign.id));
+            return;
         }
+
+        let _ = crate::campaign::cancel_campaign_by_id(&self.config, &campaign.id);
+
+        self.set_message(format!("Stopped campaign #{}. Parallel slot freed.", campaign.id));
+        self.pty.kill();
+        self.refresh();
+        self.sync_pty_with_selection(term_h, term_w);
     }
 
     pub fn sync_pty_with_selection(&mut self, term_rows: u16, term_cols: u16) {
@@ -286,17 +294,26 @@ impl App {
         };
 
         if campaign.status == CampaignStatus::Running || campaign.status == CampaignStatus::Claimed {
+            let task_session = format!("autopilot-{}", campaign.id);
+            // Check if per-task session exists, else fallback to codex-live
+            let has_task_sess = std::process::Command::new("tmux")
+                .args(["has-session", "-t", &task_session])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+
+            let attach_target = if has_task_sess { task_session } else { "codex-live".to_string() };
+
             let _ = self.pty.spawn(
                 campaign.id.clone(),
                 "tmux",
-                &["attach", "-t", "codex-live"],
+                &["attach", "-t", &attach_target],
                 &repo_dir,
                 term_rows,
                 term_cols,
             );
         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
             if campaign.agent == "opencode" {
-                // Resume OpenCode session or open in repo directory
                 let _ = self.pty.spawn(
                     campaign.id.clone(),
                     "opencode",
@@ -377,6 +394,29 @@ impl App {
                         }
                     }
                     KeyCode::Enter => {
+                        // Dynamically load models for the chosen engine
+                        modal.load_dynamic_models();
+                        modal.step = ModalStep::SelectModel;
+                    }
+                    _ => {}
+                },
+                ModalStep::SelectModel => match key.code {
+                    KeyCode::Esc => {
+                        self.modal = None;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if modal.selected_model_idx > 0 {
+                            modal.selected_model_idx -= 1;
+                        } else {
+                            modal.selected_model_idx = modal.models.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !modal.models.is_empty() {
+                            modal.selected_model_idx = (modal.selected_model_idx + 1) % modal.models.len();
+                        }
+                    }
+                    KeyCode::Enter => {
                         modal.step = ModalStep::SelectMode;
                     }
                     _ => {}
@@ -402,32 +442,6 @@ impl App {
                             modal.prompt_buffer = "Inspect codebase and resolve open issue".to_string();
                             modal.cursor_pos = modal.prompt_buffer.len();
                         }
-                        if modal.selected_engine().id == "opencode" {
-                            // OpenCode uses its configured provider, skip model step
-                            modal.step = ModalStep::EnterPrompt;
-                        } else {
-                            modal.step = ModalStep::SelectModel;
-                        }
-                    }
-                    _ => {}
-                },
-                ModalStep::SelectModel => match key.code {
-                    KeyCode::Esc => {
-                        self.modal = None;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if modal.selected_model_idx > 0 {
-                            modal.selected_model_idx -= 1;
-                        } else {
-                            modal.selected_model_idx = modal.models.len().saturating_sub(1);
-                        }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if !modal.models.is_empty() {
-                            modal.selected_model_idx = (modal.selected_model_idx + 1) % modal.models.len();
-                        }
-                    }
-                    KeyCode::Enter => {
                         modal.step = ModalStep::EnterPrompt;
                     }
                     _ => {}
@@ -476,7 +490,7 @@ impl App {
                 let repo = modal.selected_repo().to_string();
                 let engine_opt = modal.selected_engine();
                 let mode_opt = modal.selected_mode();
-                let model_opt = modal.selected_model();
+                let model_str = modal.selected_model().map(|m| m.id.as_str());
                 let prompt = modal.prompt_buffer.trim().to_string();
 
                 if !prompt.is_empty() {
@@ -486,12 +500,12 @@ impl App {
                         &prompt,
                         mode_opt.id,
                         mode_opt.iterations,
-                        if engine_opt.id == "opencode" { None } else { Some(model_opt.id) },
+                        model_str,
                         Some(engine_opt.id),
                     ) {
                         Ok(id) => {
                             self.set_message(format!(
-                                "{} #{} queued with {} on {}!",
+                                "{} #{} queued with {} on {}! (Starting in parallel slot)",
                                 if mode_opt.id == "continuous" { "24/7 Loop" } else { "Task" },
                                 id,
                                 engine_opt.label.split('(').next().unwrap_or(engine_opt.id).trim(),

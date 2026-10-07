@@ -50,6 +50,8 @@ pub struct AppConfig {
     pub rate_limit_backoff_seconds: u64,
     #[serde(default = "default_model")]
     pub default_model: String,
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent_tasks: usize,
     #[serde(default)]
     pub cliproxy: CliproxyConfig,
 }
@@ -72,6 +74,9 @@ fn default_backoff() -> u64 {
 fn default_model() -> String {
     "antigravity/gemini-3.8-flash-high".to_string()
 }
+fn default_max_concurrent() -> usize {
+    100
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -87,6 +92,7 @@ impl Default for AppConfig {
             poll_interval_seconds: default_poll_interval(),
             rate_limit_backoff_seconds: default_backoff(),
             default_model: default_model(),
+            max_concurrent_tasks: default_max_concurrent(),
             cliproxy: CliproxyConfig::default(),
         }
     }

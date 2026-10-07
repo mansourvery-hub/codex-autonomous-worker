@@ -113,7 +113,7 @@ fn run_loop(
                                 app.open_new_campaign_modal();
                             }
                             KeyCode::Char('x') => {
-                                app.cancel_active_campaign(workspace_h, workspace_w);
+                                app.cancel_selected_campaign(workspace_h, workspace_w);
                             }
                             KeyCode::F(6) | KeyCode::Tab => {
                                 if app.pty.is_running() {

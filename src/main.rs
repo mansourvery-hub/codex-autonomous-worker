@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::Parser;
 use autopilot::cli::{Cli, Commands};
 use autopilot::config::AppConfig;
-use autopilot::campaign::{load_all_campaigns, load_current, queue_campaign, CampaignStatus};
+use autopilot::campaign::{load_all_campaigns, queue_campaign, CampaignStatus};
 use autopilot::supervisor::Supervisor;
 use autopilot::tui::run_tui;
 
@@ -59,16 +59,24 @@ Launch 'autopilot' to open the control deck.");
             }
         }
         Some(Commands::Current) => {
-            if let Some(curr) = load_current(&config) {
-                println!("[1;32mCurrently Active Autonomous Campaign:[0m");
-                println!("  Task ID: {}", curr.task_id);
-                println!("  Repo:    {}", curr.repo);
-                println!("  Branch:  {}", curr.branch);
-                println!("  Model:   {}", curr.model);
-                println!("  Status:  {}", curr.status);
-                if let Some(iter) = curr.iteration {
-                    let max_i = curr.max_iterations.unwrap_or(20);
-                    println!("  Loop:    Iteration #{}/{}", iter, max_i);
+            let campaigns = load_all_campaigns(&config);
+            let active: Vec<_> = campaigns
+                .into_iter()
+                .filter(|c| c.status == CampaignStatus::Running || c.status == CampaignStatus::Claimed)
+                .collect();
+
+            if !active.is_empty() {
+                println!("[1;32mCurrently Active Parallel Campaigns ({}):[0m", active.len());
+                for c in &active {
+                    let status_str = match c.status {
+                        CampaignStatus::Running => "RUNNING",
+                        CampaignStatus::Claimed => "STARTING",
+                        _ => "ACTIVE",
+                    };
+                    println!(
+                        "  #{} [{}] [{}] ({}) - Iteration #{}/{} - {}",
+                        c.id, c.agent, c.repo, status_str, c.iteration, c.max_iterations, c.prompt
+                    );
                 }
                 println!("
 Launch 'autopilot' to enter the live control deck.");
@@ -130,7 +138,7 @@ Launch 'autopilot' to enter the live control deck.");
             }
         }
         Some(Commands::Daemon) => {
-            let supervisor = Supervisor::new(config);
+            let supervisor = std::sync::Arc::new(Supervisor::new(config));
             supervisor.run_daemon().await?;
         }
     }
