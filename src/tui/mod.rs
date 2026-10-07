@@ -74,10 +74,17 @@ fn run_loop(
                         app.handle_modal_key(key, workspace_h, workspace_w);
                     } else if app.focused_pane == FocusedPane::Terminal {
                         match key.code {
-                            KeyCode::F(6) | KeyCode::Tab | KeyCode::Esc => {
+                            KeyCode::F(6) | KeyCode::Tab => {
                                 // Toggle focus back to sidebar
                                 app.focused_pane = FocusedPane::Sidebar;
                             }
+                            KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => {
+                                app.focused_pane = FocusedPane::Sidebar;
+                            }
+                            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                app.focused_pane = FocusedPane::Sidebar;
+                            }
+                            // Crucial: Esc must be forwarded to Codex so 'esc to interrupt' works!
                             _ => {
                                 forward_key_to_pty(&mut app.pty, key)?;
                             }

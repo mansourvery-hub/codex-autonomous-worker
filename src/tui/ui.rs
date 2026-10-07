@@ -228,10 +228,12 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 fn default_footer_line(app: &App) -> Line<'static> {
     if app.focused_pane == FocusedPane::Terminal {
         Line::from(vec![
-            Span::styled(" [F6 / Tab / Esc] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(" [F6 / Tab / Alt-←] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::raw("Focus Sidebar  "),
+            Span::styled("[Esc] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw("Interrupt Codex  "),
             Span::styled("[Type] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw("Talk / Steer Codex Live  "),
+            Span::raw("Steer Live  "),
         ])
     } else {
         Line::from(vec![

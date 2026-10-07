@@ -232,7 +232,8 @@ Task Description:
         let start_time = Instant::now();
         let mut current_iteration = 1;
         let mut consecutive_idle_seconds = 0;
-        let idle_limit = self.config.idle_timeout_seconds;
+        let mut consecutive_errors = 0;
+        let idle_limit = self.config.idle_timeout_seconds.max(15);
 
         while start_time.elapsed() < timeout {
             // Check if tmux session still exists
@@ -245,15 +246,47 @@ Task Description:
             let pane_out = Command::new("tmux").args(["capture-pane", "-pt", TMUX_SESSION_NAME]).output()?;
             let pane_text = String::from_utf8_lossy(&pane_out.stdout);
 
-            // Check if human client is attached
-            let clients_out = Command::new("tmux").args(["list-clients", "-t", TMUX_SESSION_NAME]).output()?;
-            let has_client = !clients_out.stdout.is_empty();
+            let is_working = pane_text.contains("esc to interrupt") || pane_text.contains("Working (") || pane_text.contains("Thinking");
 
-            let is_working = pane_text.contains("esc to interrupt") || pane_text.contains("Working") || pane_text.contains('◦') || pane_text.contains("Thinking");
+            let has_error = pane_text.contains(r#""type":"error""#)
+                || pane_text.contains("status code: 400")
+                || pane_text.contains(r#""status":400"#)
+                || pane_text.contains("502 Bad Gateway")
+                || pane_text.contains(r#""status":502"#)
+                || pane_text.contains("429 Too Many Requests")
+                || pane_text.contains(r#""status":429"#)
+                || pane_text.contains("rate_limit");
 
-            if has_client {
+            let is_idle_at_prompt = !is_working && (pane_text.contains("Ask Codex to do anything") || pane_text.contains('›'));
+
+            // Handle upstream errors immediately if sitting idle at prompt
+            if has_error && is_idle_at_prompt {
+                consecutive_errors += 1;
+                if consecutive_errors >= 4 {
+                    eprintln!("Campaign encountered 4 consecutive unrecoverable upstream errors. Concluding session...");
+                    let _ = Command::new("tmux").args(["kill-session", "-t", TMUX_SESSION_NAME]).output();
+                    return Ok(false);
+                }
+
+                if pane_text.contains("429") || pane_text.contains("rate_limit") || pane_text.contains("502") {
+                    let backoff = self.config.rate_limit_backoff_seconds.min(60).max(15);
+                    println!("Upstream rate-limit/gateway error (429/502). Cooling down for {}s (attempt {}/4)...", backoff, consecutive_errors);
+                    std::thread::sleep(Duration::from_secs(backoff));
+                    let directive = "[Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.";
+                    let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, directive, "C-m"]).output();
+                } else {
+                    println!("Upstream API error detected. Injecting recovery directive (attempt {}/4)...", consecutive_errors);
+                    std::thread::sleep(Duration::from_secs(5));
+                    let directive = "[Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.";
+                    let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, directive, "C-m"]).output();
+                }
                 consecutive_idle_seconds = 0;
-            } else if !is_working && (pane_text.contains("Ask Codex to do anything") || pane_text.contains('›')) {
+                std::thread::sleep(Duration::from_secs(3));
+                continue;
+            }
+
+            if is_idle_at_prompt {
+                consecutive_errors = 0;
                 consecutive_idle_seconds += 2;
                 if consecutive_idle_seconds >= idle_limit {
                     if current_iteration < max_iterations {
