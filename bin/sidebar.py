@@ -15,7 +15,6 @@ STATE_DIR = BASE_DIR / "state"
 LOGS_DIR = BASE_DIR / "logs"
 CURRENT_FILE = STATE_DIR / "current.json"
 TMUX_SESSION_NAME = "codex-live"
-TUI_SESSION_NAME = "autopilot-deck"
 
 def format_duration(seconds):
     seconds = int(seconds)
@@ -27,6 +26,15 @@ def format_duration(seconds):
     hours = minutes // 60
     rem_min = minutes % 60
     return f"{hours}h {rem_min:02d}m"
+
+def get_tmux_context():
+    try:
+        s_name = subprocess.check_output(["tmux", "display-message", "-p", "#{session_name}"], stderr=subprocess.DEVNULL, text=True).strip()
+        p_count_str = subprocess.check_output(["tmux", "display-message", "-p", "#{window_panes}"], stderr=subprocess.DEVNULL, text=True).strip()
+        p_count = int(p_count_str) if p_count_str.isdigit() else 1
+        return s_name, p_count
+    except Exception:
+        return None, 0
 
 def get_available_repos():
     projects_dir = Path("/home/ubuntu/github-projects")
@@ -52,6 +60,13 @@ def get_tasks():
     tasks = []
     now = time.time()
     for p in task_files:
+        if not p.exists():
+            continue
+        try:
+            mtime = os.path.getmtime(p)
+        except (OSError, FileNotFoundError):
+            continue
+
         status = "pending"
         for s in ["claimed", "done", "failed"]:
             if f".{s}." in p.name or p.name.endswith(f".{s}.yaml") or p.name.endswith(f".{s}.json"):
@@ -67,10 +82,14 @@ def get_tasks():
         try:
             with open(p, "r") as f:
                 data = yaml.safe_load(f) if p.suffix in [".yaml", ".yml"] else json.load(f)
+        except (OSError, FileNotFoundError):
+            continue
         except Exception:
-            pass
+            data = {}
 
-        mtime = os.path.getmtime(p)
+        if not data:
+            data = {}
+
         age_str = format_duration(now - mtime) + " ago"
 
         tasks.append({
@@ -81,7 +100,7 @@ def get_tasks():
             "iteration": current_data.get("iteration", 1) if is_active else data.get("iterations", 15),
             "max_iterations": data.get("iterations", 15),
             "branch": current_data.get("branch", f"agent/task-{task_id}") if is_active else f"agent/task-{task_id}",
-            "model": data.get("model", "agentrouter/deepseek-v4-flash"),
+            "model": data.get("model", "antigravity/gemini-3.8-flash-high"),
             "prompt": data.get("prompt", p.stem).strip(),
             "age": age_str,
             "file": p
@@ -125,7 +144,7 @@ def find_task_log(task_id):
         logs = sorted(LOGS_DIR.glob("codex_*.log"), key=os.path.getmtime)
     return logs[-1] if logs else None
 
-def action_select_task(task):
+def action_select_task(task, stdscr=None):
     status = task["status"]
     task_id = task["id"]
     repo_name = task.get("repo", "")
@@ -136,44 +155,86 @@ def action_select_task(task):
         if not repo_dir.exists():
             repo_dir = Path("/home/ubuntu/github-projects/codex-autonomous-worker")
 
-    if status in ["running", "claimed"]:
-        subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
-        subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
-    elif status in ["done", "failed"]:
-        session_id = find_session_for_task(task_id)
-        if session_id:
-            model = task.get("model", "agentrouter/deepseek-v4-flash")
-            resume_cmd = (
-                f"codex resume {session_id} "
-                f"-C '{repo_dir}' "
-                f"-c openai_base_url='http://127.0.0.1:8317/v1' "
-                f"-c model_catalog_json='/home/ubuntu/.codex/model-catalogs/gateway.json' "
-                f"-c model='{model}' "
-                f"--dangerously-bypass-approvals-and-sandbox"
-            )
-            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", resume_cmd], capture_output=True)
-            subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
-        else:
-            log_f = find_task_log(task_id)
-            if log_f:
-                subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"less -R +G '{log_f}'"], capture_output=True)
-                subprocess.run(["tmux", "select-pane", "-t", f"{TUI_SESSION_NAME}:0.1"], capture_output=True)
+    s_name, p_count = get_tmux_context()
+
+    if s_name:
+        # We are inside tmux!
+        if p_count == 1:
+            # Only 1 pane exists: split window to create pane 1
+            subprocess.run(["tmux", "split-window", "-h", "-t", f"{s_name}:0", "-p", "58"], capture_output=True)
+
+        pane_target = f"{s_name}:0.1"
+
+        if status in ["running", "claimed"]:
+            subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
+            subprocess.run(["tmux", "select-pane", "-t", pane_target], capture_output=True)
+        elif status in ["done", "failed"]:
+            session_id = find_session_for_task(task_id)
+            if session_id:
+                model = task.get("model", "antigravity/gemini-3.8-flash-high")
+                resume_cmd = (
+                    f"codex resume {session_id} "
+                    f"-C '{repo_dir}' "
+                    f"-c openai_base_url='http://127.0.0.1:8317/v1' "
+                    f"-c model_catalog_json='/home/ubuntu/.codex/model-catalogs/gateway.json' "
+                    f"-c model='{model}' "
+                    f"--dangerously-bypass-approvals-and-sandbox"
+                )
+                subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, resume_cmd], capture_output=True)
+                subprocess.run(["tmux", "select-pane", "-t", pane_target], capture_output=True)
             else:
-                info_cmd = f"sh -c 'echo Campaign #{task_id} completed.; echo No session file recorded.; echo; read -p Press enter to close...'"
-                subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
+                log_f = find_task_log(task_id)
+                if log_f:
+                    subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, f"less -R +G '{log_f}'"], capture_output=True)
+                    subprocess.run(["tmux", "select-pane", "-t", pane_target], capture_output=True)
+                else:
+                    info_cmd = f"sh -c 'echo Campaign #{task_id} completed.; echo No session file recorded.; echo; read -p Press enter to close...'"
+                    subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, info_cmd], capture_output=True)
+        else:
+            info_cmd = f"sh -c 'echo === Campaign #{task_id} [QUEUED] ===; echo Standing by for autonomous daemon...; sleep 10'"
+            subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, info_cmd], capture_output=True)
     else:
-        info_cmd = f"sh -c 'echo === Campaign #{task_id} [QUEUED] ===; echo Repo: {task.get("repo", "unknown")}; echo Standing by for autonomous daemon...; sleep 10'"
-        subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", info_cmd], capture_output=True)
+        # Not inside tmux: run directly in terminal by suspending curses
+        if stdscr:
+            curses.endwin()
+
+        if status in ["running", "claimed"]:
+            subprocess.run(["tmux", "attach", "-t", TMUX_SESSION_NAME])
+        elif status in ["done", "failed"]:
+            session_id = find_session_for_task(task_id)
+            if session_id:
+                model = task.get("model", "antigravity/gemini-3.8-flash-high")
+                resume_args = [
+                    "codex", "resume", session_id,
+                    "-C", str(repo_dir),
+                    "-c", "openai_base_url=http://127.0.0.1:8317/v1",
+                    "-c", "model_catalog_json=/home/ubuntu/.codex/model-catalogs/gateway.json",
+                    "-c", f"model={model}",
+                    "--dangerously-bypass-approvals-and-sandbox"
+                ]
+                subprocess.run(resume_args)
+            else:
+                log_f = find_task_log(task_id)
+                if log_f:
+                    subprocess.run(["less", "-R", "+G", str(log_f)])
+
+        if stdscr:
+            stdscr.refresh()
 
 def preview_task(task):
+    s_name, p_count = get_tmux_context()
+    if not s_name or p_count <= 1:
+        return
+
+    pane_target = f"{s_name}:0.1"
     status = task["status"]
     task_id = task["id"]
     if status in ["running", "claimed"]:
-        subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
+        subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, f"TMUX= tmux attach -t {TMUX_SESSION_NAME}"], capture_output=True)
     elif status in ["done", "failed"]:
         log_f = find_task_log(task_id)
         if log_f:
-            subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TUI_SESSION_NAME}:0.1", f"tail -n 80 '{log_f}'"], capture_output=True)
+            subprocess.run(["tmux", "respawn-pane", "-k", "-t", pane_target, f"tail -n 80 '{log_f}'"], capture_output=True)
 
 def modal_input(stdscr, title, prompt_label, default_text=""):
     h, w = stdscr.getmaxyx()
@@ -253,7 +314,7 @@ def queue_new_campaign(repo_name, prompt_text, iterations=30):
         "iterations": iterations,
         "priority": "high",
         "status": "pending",
-        "model": "agentrouter/deepseek-v4-flash",
+        "model": "antigravity/gemini-3.8-flash-high",
         "prompt": prompt_text
     }
     with open(task_file, "w") as f:
@@ -268,7 +329,6 @@ def main(stdscr):
     stdscr.nodelay(True)
     stdscr.timeout(1000)
 
-    # Initialize color palette
     curses.init_pair(1, curses.COLOR_GREEN, -1)   # Working / Done
     curses.init_pair(2, curses.COLOR_YELLOW, -1)  # Claimed / Active
     curses.init_pair(3, curses.COLOR_CYAN, -1)    # Headers & Borders
@@ -344,7 +404,6 @@ def main(stdscr):
 
                 prefix = "▸ " if is_sel else "  "
 
-                # Line 1: Header: Pill + Task ID + Age
                 l1 = f"{prefix}{pill} #{t['id']} · {t['age']}"
                 if is_sel:
                     stdscr.addstr(card_y, 0, l1[:w].ljust(w), curses.color_pair(5) | curses.A_BOLD)
@@ -354,18 +413,15 @@ def main(stdscr):
                     suffix = f" #{t['id']} · {t['age']}"
                     stdscr.addstr(card_y, len(prefix) + len(pill), suffix[:max(0, w - len(prefix) - len(pill))], curses.color_pair(6))
 
-                # Line 2: Task Title / Prompt
                 l2 = f"    {t['prompt']}"
                 stdscr.addstr(card_y + 1, 0, l2[:w].ljust(w) if is_sel else l2[:w], curses.color_pair(6) | (curses.A_BOLD if is_sel else 0))
 
-                # Line 3: Repo + Branch / Loop progress
                 if t["status"] == "running":
                     l3 = f"    {t['repo']} · {t['branch']} · Iter #{t['iteration']}/{t['max_iterations']}"
                 else:
                     l3 = f"    {t['repo']} · {t['model']} · {t['mode']} loop"
                 stdscr.addstr(card_y + 2, 0, l3[:w].ljust(w) if is_sel else l3[:w], curses.color_pair(3))
 
-                # Line 4: Separator
                 stdscr.addstr(card_y + 3, 0, (" " * w) if is_sel else ("·" * min(w - 1, 30)), curses.color_pair(3))
 
         # 3. Footer Bar
@@ -396,15 +452,13 @@ def main(stdscr):
                 selected_idx = min(len(tasks) - 1, selected_idx + 1)
         elif ch in [10, 13, curses.KEY_ENTER]:
             if tasks and selected_idx < len(tasks):
-                action_select_task(tasks[selected_idx])
+                action_select_task(tasks[selected_idx], stdscr=stdscr)
         elif ch == ord('n'):
-            # Step 1: Target Repository
             available_repos = get_available_repos()
             default_repo = available_repos[0] if available_repos else "chess-repertoire-srs"
             repo_choice = modal_input(stdscr, "New 24/7 Campaign [1/2]", "Target Repository", default_repo)
             
             if repo_choice is not None and repo_choice.strip():
-                # Step 2: Campaign Objective
                 default_prompt = "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively"
                 p_text = modal_input(stdscr, "New 24/7 Campaign [2/2]", "Campaign Objective", default_prompt)
                 
@@ -414,7 +468,7 @@ def main(stdscr):
                     message_time = time.time()
                     selected_idx = 0
                     last_previewed_idx = -1
-        elif ch in [ord('q'), 27]: # q or Esc detaches from deck
+        elif ch in [ord('q'), 27]:
             subprocess.run(["tmux", "detach-client"], capture_output=True)
             break
         elif ch == curses.KEY_MOUSE:
