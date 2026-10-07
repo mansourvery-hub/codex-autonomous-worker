@@ -26,7 +26,7 @@ pub fn run_tui(config: AppConfig) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::new(config);
-    let tick_rate = Duration::from_millis(100);
+    let tick_rate = Duration::from_millis(30);
 
     let res = run_loop(&mut terminal, &mut app, tick_rate);
 

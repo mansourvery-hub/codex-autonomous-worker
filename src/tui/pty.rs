@@ -66,7 +66,7 @@ impl PtySession {
 
         let mut reader = pair.master.try_clone_reader()?;
         std::thread::spawn(move || {
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 16384];
             while let Ok(n) = reader.read(&mut buf) {
                 if n == 0 {
                     break;

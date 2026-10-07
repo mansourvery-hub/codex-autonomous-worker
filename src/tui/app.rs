@@ -51,6 +51,7 @@ pub struct ModalState {
     pub selected_engine_idx: usize,
     pub models: Vec<ModelOption>,
     pub selected_model_idx: usize,
+    pub model_filter: String,
     pub modes: Vec<ModeOption>,
     pub selected_mode_idx: usize,
     pub prompt_buffer: String,
@@ -101,6 +102,7 @@ impl ModalState {
             selected_engine_idx: 0,
             models,
             selected_model_idx: 0,
+            model_filter: String::new(),
             modes,
             selected_mode_idx: 0,
             prompt_buffer: "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively".to_string(),
@@ -124,8 +126,29 @@ impl ModalState {
         &self.modes[self.selected_mode_idx % self.modes.len()]
     }
 
+    pub fn filtered_models(&self) -> Vec<(usize, &ModelOption)> {
+        if self.model_filter.trim().is_empty() {
+            self.models.iter().enumerate().collect()
+        } else {
+            let query = self.model_filter.trim().to_lowercase();
+            self.models
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| {
+                    m.id.to_lowercase().contains(&query) || m.label.to_lowercase().contains(&query)
+                })
+                .collect()
+        }
+    }
+
     pub fn selected_model(&self) -> Option<&ModelOption> {
-        self.models.get(self.selected_model_idx)
+        let filtered = self.filtered_models();
+        if filtered.is_empty() {
+            None
+        } else {
+            let idx = self.selected_model_idx.min(filtered.len().saturating_sub(1));
+            Some(filtered[idx].1)
+        }
     }
 
     pub fn load_dynamic_models(&mut self) {
@@ -144,6 +167,7 @@ impl ModalState {
             })
             .collect();
         self.selected_model_idx = 0;
+        self.model_filter.clear();
     }
 }
 
@@ -400,27 +424,77 @@ impl App {
                     }
                     _ => {}
                 },
-                ModalStep::SelectModel => match key.code {
-                    KeyCode::Esc => {
-                        self.modal = None;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if modal.selected_model_idx > 0 {
-                            modal.selected_model_idx -= 1;
-                        } else {
-                            modal.selected_model_idx = modal.models.len().saturating_sub(1);
+                ModalStep::SelectModel => {
+                    let total = modal.filtered_models().len();
+                    match key.code {
+                        KeyCode::Esc => {
+                            if !modal.model_filter.is_empty() {
+                                modal.model_filter.clear();
+                                modal.selected_model_idx = 0;
+                            } else {
+                                self.modal = None;
+                            }
                         }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if !modal.models.is_empty() {
-                            modal.selected_model_idx = (modal.selected_model_idx + 1) % modal.models.len();
+                        KeyCode::Up => {
+                            if modal.selected_model_idx > 0 {
+                                modal.selected_model_idx -= 1;
+                            } else if total > 0 {
+                                modal.selected_model_idx = total - 1;
+                            }
                         }
+                        KeyCode::Down => {
+                            if total > 0 {
+                                modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+                            }
+                        }
+                        KeyCode::PageUp => {
+                            modal.selected_model_idx = modal.selected_model_idx.saturating_sub(10);
+                        }
+                        KeyCode::PageDown => {
+                            if total > 0 {
+                                modal.selected_model_idx = (modal.selected_model_idx + 10).min(total - 1);
+                            }
+                        }
+                        KeyCode::Home => {
+                            modal.selected_model_idx = 0;
+                        }
+                        KeyCode::End => {
+                            if total > 0 {
+                                modal.selected_model_idx = total - 1;
+                            }
+                        }
+                        KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            if modal.selected_model_idx > 0 {
+                                modal.selected_model_idx -= 1;
+                            } else if total > 0 {
+                                modal.selected_model_idx = total - 1;
+                            }
+                        }
+                        KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            if total > 0 {
+                                modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+                            }
+                        }
+                        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            modal.model_filter.clear();
+                            modal.selected_model_idx = 0;
+                        }
+                        KeyCode::Char(c) => {
+                            modal.model_filter.push(c);
+                            modal.selected_model_idx = 0;
+                        }
+                        KeyCode::Backspace => {
+                            modal.model_filter.pop();
+                            modal.selected_model_idx = 0;
+                        }
+                        KeyCode::Enter => {
+                            if total > 0 {
+                                modal.step = ModalStep::SelectMode;
+                            }
+                        }
+                        _ => {}
                     }
-                    KeyCode::Enter => {
-                        modal.step = ModalStep::SelectMode;
-                    }
-                    _ => {}
-                },
+                }
                 ModalStep::SelectMode => match key.code {
                     KeyCode::Esc => {
                         self.modal = None;

@@ -270,8 +270,26 @@ fn default_footer_line(app: &App) -> Line<'static> {
 }
 
 fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Rect) {
-    let width = 74.min(screen.width.saturating_sub(6));
-    let height = 12.min(screen.height.saturating_sub(4));
+    let (width, height) = match modal.step {
+        ModalStep::SelectModel => {
+            (
+                86.min(screen.width.saturating_sub(4)),
+                24.min(screen.height.saturating_sub(4)),
+            )
+        }
+        ModalStep::EnterPrompt => {
+            (
+                76.min(screen.width.saturating_sub(4)),
+                12.min(screen.height.saturating_sub(4)),
+            )
+        }
+        _ => {
+            (
+                74.min(screen.width.saturating_sub(4)),
+                14.min(screen.height.saturating_sub(4)),
+            )
+        }
+    };
     let x = (screen.width.saturating_sub(width)) / 2;
     let y = (screen.height.saturating_sub(height)) / 2;
     let modal_area = Rect::new(x, y, width, height);
@@ -337,23 +355,92 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             frame.render_widget(list, modal_area);
         }
         ModalStep::SelectModel => {
-            let items: Vec<ListItem> = modal.models.iter().enumerate().map(|(idx, m)| {
-                let is_sel = idx == modal.selected_model_idx;
+            let engine_name = modal.selected_engine().label.split('(').next().unwrap_or(modal.selected_engine().id).trim();
+            let filtered = modal.filtered_models();
+            let total = filtered.len();
+
+            let current_pos = if total > 0 { modal.selected_model_idx + 1 } else { 0 };
+            let title_info = if modal.model_filter.is_empty() {
+                format!(" New Campaign: Select Model for {} [{}/{}] ", engine_name, current_pos, total)
+            } else {
+                format!(" New Campaign: Select Model for {} [Match {}/{}] ", engine_name, current_pos, total)
+            };
+
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(title_info)
+                .border_style(Style::default().fg(Color::Cyan));
+
+            let inner = block.inner(modal_area);
+            frame.render_widget(block, modal_area);
+
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(2), // Search bar & navigation hints
+                    Constraint::Min(4),    // Scrollable list
+                ])
+                .split(inner);
+
+            // Search filter row
+            let filter_line = if modal.model_filter.is_empty() {
+                Line::from(vec![
+                    Span::styled("  Search: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled("(Type to filter models...)  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("[↑/↓] ", Style::default().fg(Color::Green)),
+                    Span::raw("Scroll  "),
+                    Span::styled("[PgUp/PgDn] ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Page  "),
+                    Span::styled("[Enter] ", Style::default().fg(Color::Cyan)),
+                    Span::raw("Select"),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::styled("  Search: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("'{}'█ ", modal.model_filter), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled("(Backspace deletes, Esc/Ctrl-U clears filter)", Style::default().fg(Color::DarkGray)),
+                ])
+            };
+            let sep_line = Line::from(Span::styled("  ──────────────────────────────────────────────────────────────────────────────", Style::default().fg(Color::Rgb(40, 42, 58))));
+            let search_widget = Paragraph::new(vec![filter_line, sep_line]);
+            frame.render_widget(search_widget, chunks[0]);
+
+            // Scrollable List Area
+            let list_area = chunks[1];
+            let visible_rows = list_area.height as usize;
+            let mut scroll_offset = 0;
+            if modal.selected_model_idx >= visible_rows {
+                scroll_offset = modal.selected_model_idx.saturating_sub(visible_rows.saturating_sub(1));
+            }
+
+            let end_idx = (scroll_offset + visible_rows).min(total);
+            let visible_slice = if total > 0 { &filtered[scroll_offset..end_idx] } else { &[] };
+
+            let items: Vec<ListItem> = visible_slice.iter().map(|(real_idx, m)| {
+                let is_sel = *real_idx == modal.selected_model_idx;
                 let prefix = if is_sel { "▸ " } else { "  " };
-                let mut item = ListItem::new(format!("{}{}", prefix, m.label));
+                let num = real_idx + 1;
+                let text = format!("{:>2}. {}{}", num, prefix, m.label);
+                let mut item = ListItem::new(text);
                 if is_sel {
-                    item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+                    item = item.style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD)
+                            .bg(Color::Rgb(30, 32, 48)),
+                    );
                 }
                 item
             }).collect();
 
-            let list = List::new(items)
-                .block(Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" New Campaign: Select Model for {} ", modal.selected_engine().label.split('(').next().unwrap_or(modal.selected_engine().id).trim()))
-                    .border_style(Style::default().fg(Color::Cyan)));
-
-            frame.render_widget(list, modal_area);
+            if items.is_empty() {
+                let empty = Paragraph::new(format!("  No models match query '{}'. Press Backspace or Esc to clear.", modal.model_filter))
+                    .style(Style::default().fg(Color::Red));
+                frame.render_widget(empty, list_area);
+            } else {
+                let list = List::new(items);
+                frame.render_widget(list, list_area);
+            }
         }
         ModalStep::EnterPrompt => {
             let mode_tag = if modal.selected_mode().id == "continuous" { "24/7 Loop (30 iters)" } else { "Single Task" };

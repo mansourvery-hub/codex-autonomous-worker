@@ -15,9 +15,18 @@ pub fn get_codex_models() -> Vec<ModelInfo> {
                 for m in models {
                     if let Some(slug) = m.get("slug").and_then(|s| s.as_str()) {
                         let name = m.get("display_name").and_then(|d| d.as_str()).unwrap_or(slug);
+                        let desc = if slug.contains("flash") {
+                            format!("{} ({}) [Fast]", name, slug)
+                        } else if slug.contains("free") {
+                            format!("{} ({}) [Free]", name, slug)
+                        } else if slug.contains("opus") || slug.contains("astra") {
+                            format!("{} ({}) [Frontier Reasoning]", name, slug)
+                        } else {
+                            format!("{} ({})", name, slug)
+                        };
                         list.push(ModelInfo {
                             id: slug.to_string(),
-                            display_name: format!("{} ({})", name, slug),
+                            display_name: desc,
                         });
                     }
                 }
@@ -31,15 +40,15 @@ pub fn get_codex_models() -> Vec<ModelInfo> {
     vec![
         ModelInfo {
             id: "antigravity/gemini-3.8-flash-high".to_string(),
-            display_name: "Gemini 3.8 Flash High (antigravity/gemini-3.8-flash-high)".to_string(),
+            display_name: "Gemini 3.8 Flash High (antigravity/gemini-3.8-flash-high) [Fast, 1M Context]".to_string(),
         },
         ModelInfo {
             id: "agentrouter/deepseek-v4-flash".to_string(),
-            display_name: "DeepSeek V4 Flash (agentrouter/deepseek-v4-flash)".to_string(),
+            display_name: "DeepSeek V4 Flash (agentrouter/deepseek-v4-flash) [Fast Code]".to_string(),
         },
         ModelInfo {
             id: "gemini-3.5-flash-lite".to_string(),
-            display_name: "Gemini 3.5 Flash Lite (gemini-3.5-flash-lite)".to_string(),
+            display_name: "Gemini 3.5 Flash Lite (gemini-3.5-flash-lite) [Ultra Fast]".to_string(),
         },
     ]
 }
@@ -51,13 +60,20 @@ pub fn get_opencode_models() -> Vec<ModelInfo> {
             let mut list = Vec::new();
             for line in text.lines() {
                 let trimmed = line.trim();
-                if !trimmed.is_empty() && !trimmed.contains(" ") {
+                // Filter out offline bifrost models and empty lines
+                if !trimmed.is_empty() && !trimmed.contains(' ') && !trimmed.starts_with("bifrost/") {
                     let desc = if trimmed.starts_with("opencode/") {
-                        format!("{} [Built-in Free]", trimmed)
-                    } else if trimmed.starts_with("bifrost/") {
-                        format!("{} [Bifrost Gateway]", trimmed)
+                        let short = trimmed.strip_prefix("opencode/").unwrap_or(trimmed);
+                        format!("{} ({}) [Built-in Free]", short, trimmed)
                     } else if trimmed.starts_with("cliproxy/") {
-                        format!("{} [CLIProxy]", trimmed)
+                        let short = trimmed.strip_prefix("cliproxy/").unwrap_or(trimmed);
+                        if short.contains("flash") {
+                            format!("{} ({}) [Fast / CLIProxy]", short, trimmed)
+                        } else if short.contains("free") {
+                            format!("{} ({}) [Free / CLIProxy]", short, trimmed)
+                        } else {
+                            format!("{} ({}) [CLIProxy]", short, trimmed)
+                        }
                     } else {
                         trimmed.to_string()
                     };
@@ -80,6 +96,9 @@ pub fn get_opencode_models() -> Vec<ModelInfo> {
                 if let Some(providers) = v.get("providers").and_then(|p| p.as_object()) {
                     let mut list = Vec::new();
                     for (prov_name, prov_val) in providers {
+                        if prov_name == "bifrost" {
+                            continue;
+                        }
                         if let Some(models) = prov_val.get("models").and_then(|m| m.as_object()) {
                             for (model_key, _) in models {
                                 let full_id = format!("{}/{}", prov_name, model_key);
@@ -100,12 +119,12 @@ pub fn get_opencode_models() -> Vec<ModelInfo> {
 
     vec![
         ModelInfo {
-            id: "opencode/nemotron-3.5-lightning-free".to_string(),
-            display_name: "Nemotron 3.5 Lightning Free (opencode/nemotron-3.5-lightning-free)".to_string(),
+            id: "cliproxy/antigravity/gemini-3.8-flash-high".to_string(),
+            display_name: "Antigravity Gemini 3.8 Flash High [CLIProxy / Fast]".to_string(),
         },
         ModelInfo {
-            id: "bifrost/amd-deepseek-v4-flash".to_string(),
-            display_name: "AMD DeepSeek V4 Flash (bifrost/amd-deepseek-v4-flash)".to_string(),
+            id: "opencode/nemotron-3.5-lightning-free".to_string(),
+            display_name: "Nemotron 3.5 Lightning Free [Built-in Free]".to_string(),
         },
     ]
 }
