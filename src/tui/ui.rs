@@ -5,13 +5,12 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
-use crate::campaign::{find_log_for_campaign, CampaignStatus};
-use crate::tui::app::{App, ModalStep};
+use crate::campaign::CampaignStatus;
+use crate::tui::app::{App, FocusedPane, ModalStep};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
 
-    // Vertical layout: Top Banner (3 lines) -> Main Content (flexible) -> Footer (3 lines)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -55,13 +54,14 @@ fn draw_top_banner(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(banner, area);
 }
 
-fn draw_main_split(frame: &mut Frame, app: &App, area: Rect) {
-    // Horizontal layout: Left Sidebar 42% (min 45 cols) -> Right Workspace 58%
+fn draw_main_split(frame: &mut Frame, app: &mut App, area: Rect) {
+    // Compact sidebar on the left: fixed 32 columns (cf t3code)
+    let sidebar_w = 32.min(area.width.saturating_sub(40));
     let split_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(42),
-            Constraint::Percentage(58),
+            Constraint::Length(sidebar_w),
+            Constraint::Min(40),
         ])
         .split(area);
 
@@ -70,18 +70,18 @@ fn draw_main_split(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
-    let card_height = 4;
-    let _visible_cards = (area.height as usize).saturating_sub(2) / card_height;
+    let is_focused = app.focused_pane == FocusedPane::Sidebar;
+    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
     let items: Vec<ListItem> = app.campaigns.iter().enumerate().map(|(idx, c)| {
         let is_selected = idx == app.selected_index;
 
         let (pill_text, pill_color) = match c.status {
-            CampaignStatus::Running => ("[● WORKING]", Color::Green),
-            CampaignStatus::Claimed => ("[▶ CLAIMED]", Color::Yellow),
-            CampaignStatus::Pending => ("[○ QUEUED ]", Color::Magenta),
-            CampaignStatus::Done => ("[✔ DONE   ]", Color::Green),
-            CampaignStatus::Failed => ("[✖ ERROR  ]", Color::Red),
+            CampaignStatus::Running => ("[● WRK]", Color::Green),
+            CampaignStatus::Claimed => ("[▶ CLM]", Color::Yellow),
+            CampaignStatus::Pending => ("[○ QUD]", Color::Magenta),
+            CampaignStatus::Done => ("[✔ DON]", Color::Green),
+            CampaignStatus::Failed => ("[✖ ERR]", Color::Red),
         };
 
         let prefix = if is_selected { "▸ " } else { "  " };
@@ -93,20 +93,20 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
         ]);
 
         let line2 = Line::from(vec![
-            Span::raw("    "),
+            Span::raw("  "),
             Span::styled(c.prompt.clone(), Style::default().fg(if is_selected { Color::White } else { Color::Gray }).add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() })),
         ]);
 
         let line3_text = if c.status == CampaignStatus::Running {
-            format!("    {} · {} · Iter #{}/{}", c.repo, c.branch, c.iteration, c.max_iterations)
+            format!("  {} · Iter #{}/{}", c.repo, c.iteration, c.max_iterations)
         } else {
-            format!("    {} · {} · {} loop", c.repo, c.model, c.mode)
+            format!("  {} · {} loop", c.repo, c.mode)
         };
         let line3 = Line::from(vec![
             Span::styled(line3_text, Style::default().fg(Color::DarkGray)),
         ]);
 
-        let line4 = Line::from(Span::styled("    ────────────────────────────────", Style::default().fg(Color::Rgb(40, 40, 50))));
+        let line4 = Line::from(Span::styled("  ──────────────────────────────", Style::default().fg(Color::Rgb(40, 40, 50))));
 
         let mut item = ListItem::new(vec![line1, line2, line3, line4]);
         if is_selected {
@@ -119,29 +119,49 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
     let list_widget = List::new(items)
         .block(Block::default()
             .borders(Borders::ALL)
-            .title(Span::styled(title, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
-            .border_style(Style::default().fg(Color::DarkGray)));
+            .title(Span::styled(title, Style::default().fg(if is_focused { Color::Cyan } else { Color::Gray }).add_modifier(Modifier::BOLD)))
+            .border_style(Style::default().fg(border_color)));
 
     frame.render_widget(list_widget, area);
 }
 
-fn draw_workspace(frame: &mut Frame, app: &App, area: Rect) {
-    let campaign_opt = app.selected_campaign();
+fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
+    let is_focused = app.focused_pane == FocusedPane::Terminal;
+    let border_color = if is_focused { Color::Green } else { Color::DarkGray };
+
+    let pty_running = app.pty.is_running();
+
+    let title = if is_focused {
+        " Codex Live Workspace [FOCUSED - F6/Tab to exit] "
+    } else if pty_running {
+        " Codex Live Workspace [Enter to focus & talk] "
+    } else {
+        " Codex Workspace & Session [Enter to load] "
+    };
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(" Campaign Workspace & Codex Session ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
-        .border_style(Style::default().fg(Color::DarkGray));
+        .title(Span::styled(title, Style::default().fg(if is_focused { Color::Green } else { Color::Cyan }).add_modifier(Modifier::BOLD)))
+        .border_style(Style::default().fg(border_color));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if let Some(c) = campaign_opt {
+    // If PTY is running or has been initialized, render the actual virtual screen!
+    if pty_running || app.pty.active_task_id.is_some() {
+        // Resize PTY if needed
+        app.pty.resize(inner.height, inner.width);
+        app.pty.render_screen(frame, inner);
+        return;
+    }
+
+    // Otherwise show selected campaign info card
+    if let Some(c) = app.selected_campaign() {
         let (status_text, status_color) = match c.status {
-            CampaignStatus::Running => ("RUNNING (Interactive Codex active in codex-live)", Color::Green),
+            CampaignStatus::Running => ("RUNNING (Live session ready in codex-live)", Color::Green),
             CampaignStatus::Claimed => ("CLAIMED (Worktree being provisioned)", Color::Yellow),
-            CampaignStatus::Pending => ("QUEUED (Waiting for autonomous supervisor)", Color::Magenta),
-            CampaignStatus::Done => ("COMPLETED (Ready to resume / inspect in Codex)", Color::Green),
+            CampaignStatus::Pending => ("QUEUED (Standing by for supervisor)", Color::Magenta),
+            CampaignStatus::Done => ("COMPLETED (Ready to resume in Codex)", Color::Green),
             CampaignStatus::Failed => ("FAILED", Color::Red),
         };
 
@@ -168,34 +188,20 @@ fn draw_workspace(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Model:       ", Style::default().fg(Color::Gray)),
             Span::styled(c.model.clone(), Style::default().fg(Color::Cyan)),
             Span::raw("    "),
-            Span::styled("Mode:   ", Style::default().fg(Color::Gray)),
-            Span::styled(format!("{} (budget: {} iterations)", c.mode, c.max_iterations), Style::default().fg(Color::White)),
+            Span::styled("Loop:   ", Style::default().fg(Color::Gray)),
+            Span::styled(format!("{} iterations max", c.max_iterations), Style::default().fg(Color::White)),
         ]));
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("─── Execution Log & Output Preview ───────────────────────────────", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled("─── Action ───────────────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
 
-        // Read tail of log file if available
-        let mut log_lines_found = false;
-        if let Some(log_path) = find_log_for_campaign(&app.config, &c.id) {
-            if let Ok(content) = std::fs::read_to_string(&log_path) {
-                let recent: Vec<String> = content.lines().rev().take(15).map(|s| s.to_string()).collect();
-                for l in recent.into_iter().rev() {
-                    lines.push(Line::from(Span::styled(l, Style::default().fg(Color::Gray))));
-                }
-                log_lines_found = true;
-            }
-        }
-
-        if !log_lines_found {
-            if c.status == CampaignStatus::Running {
-                lines.push(Line::from(Span::styled("Agent is actively executing in tmux session 'codex-live'.", Style::default().fg(Color::Green))));
-                lines.push(Line::from(Span::styled("Press [Enter] to connect directly to the live Codex interactive TUI.", Style::default().fg(Color::Yellow))));
-            } else if c.status == CampaignStatus::Done {
-                lines.push(Line::from(Span::styled("Campaign finished and recorded to session history.", Style::default().fg(Color::Green))));
-                lines.push(Line::from(Span::styled("Press [Enter] to open the full interactive Codex session with all turns and diffs.", Style::default().fg(Color::Cyan))));
-            } else {
-                lines.push(Line::from(Span::styled("Campaign is queued. Supervisor daemon will claim it shortly.", Style::default().fg(Color::DarkGray))));
-            }
+        if c.status == CampaignStatus::Running {
+            lines.push(Line::from(Span::styled("Press [Enter] to display the live interactive Codex TUI here.", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))));
+            lines.push(Line::from(Span::styled("You will see the agent think, run tools, and can type to it live.", Style::default().fg(Color::Gray))));
+        } else if c.status == CampaignStatus::Done {
+            lines.push(Line::from(Span::styled("Press [Enter] to load this full recorded session in the Codex TUI.", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+            lines.push(Line::from(Span::styled("Browse all turns, tool outputs, and inspect diffs directly here.", Style::default().fg(Color::Gray))));
+        } else {
+            lines.push(Line::from(Span::styled("Campaign is queued. Press [Enter] once claimed to connect.", Style::default().fg(Color::DarkGray))));
         }
 
         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
@@ -213,10 +219,10 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         if instant.elapsed().as_secs() < 3 {
             Line::from(Span::styled(format!(" ★ {}", msg), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
         } else {
-            default_footer_line()
+            default_footer_line(app)
         }
     } else {
-        default_footer_line()
+        default_footer_line(app)
     };
 
     let footer = Paragraph::new(footer_text)
@@ -225,21 +231,32 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(footer, area);
 }
 
-fn default_footer_line() -> Line<'static> {
-    Line::from(vec![
-        Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::raw("Connect / Resume Codex  "),
-        Span::styled("[n] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw("New 24/7 Campaign  "),
-        Span::styled("[r] ", Style::default().fg(Color::Cyan)),
-        Span::raw("Refresh  "),
-        Span::styled("[q] ", Style::default().fg(Color::Red)),
-        Span::raw("Quit"),
-    ])
+fn default_footer_line(app: &App) -> Line<'static> {
+    if app.focused_pane == FocusedPane::Terminal {
+        Line::from(vec![
+            Span::styled(" [F6 / Tab] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw("Return to Sidebar  "),
+            Span::styled("[Type] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("Interact with Codex  "),
+            Span::styled("[Esc Esc] ", Style::default().fg(Color::Yellow)),
+            Span::raw("Unfocus  "),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw("Open Codex TUI here  "),
+            Span::styled("[n] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("New 24/7 Campaign  "),
+            Span::styled("[r] ", Style::default().fg(Color::Cyan)),
+            Span::raw("Refresh  "),
+            Span::styled("[q] ", Style::default().fg(Color::Red)),
+            Span::raw("Quit"),
+        ])
+    }
 }
 
 fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Rect) {
-    let width = 70.min(screen.width.saturating_sub(6));
+    let width = 60.min(screen.width.saturating_sub(6));
     let height = 10.min(screen.height.saturating_sub(4));
     let x = (screen.width.saturating_sub(width)) / 2;
     let y = (screen.height.saturating_sub(height)) / 2;
@@ -262,7 +279,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New 24/7 Campaign [1/2]: Select Target Repository ")
+                    .title(" New Campaign [1/2]: Select Target Repository ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -270,7 +287,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
         ModalStep::EnterPrompt => {
             let block = Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" New 24/7 Campaign [2/2]: Target [{}] ", modal.selected_repo()))
+                .title(format!(" New Campaign [2/2]: Target [{}] ", modal.selected_repo()))
                 .border_style(Style::default().fg(Color::Cyan));
 
             let inner = block.inner(modal_area);
@@ -290,7 +307,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
                 .wrap(Wrap { trim: false });
             frame.render_widget(input, chunks[1]);
 
-            let hint = Paragraph::new("[Enter] Launch 24/7 Autonomous Campaign    [Esc] Cancel")
+            let hint = Paragraph::new("[Enter] Launch Campaign    [Esc] Cancel")
                 .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
             frame.render_widget(hint, chunks[2]);
         }

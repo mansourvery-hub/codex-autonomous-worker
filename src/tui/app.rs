@@ -1,7 +1,14 @@
 use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crate::campaign::{load_all_campaigns, queue_campaign, Campaign};
+use crate::campaign::{find_session_for_campaign, load_all_campaigns, queue_campaign, Campaign, CampaignStatus};
 use crate::config::AppConfig;
+use crate::tui::pty::PtySession;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusedPane {
+    Sidebar,
+    Terminal,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModalStep {
@@ -43,6 +50,8 @@ pub struct App {
     pub campaigns: Vec<Campaign>,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    pub focused_pane: FocusedPane,
+    pub pty: PtySession,
     pub modal: Option<ModalState>,
     pub message: Option<(String, Instant)>,
     pub should_quit: bool,
@@ -57,6 +66,8 @@ impl App {
             campaigns: Vec::new(),
             selected_index: 0,
             scroll_offset: 0,
+            focused_pane: FocusedPane::Sidebar,
+            pty: PtySession::default(),
             modal: None,
             message: None,
             should_quit: false,
@@ -125,6 +136,63 @@ impl App {
 
     pub fn close_modal(&mut self) {
         self.modal = None;
+    }
+
+    pub fn launch_or_attach_pty(&mut self, term_rows: u16, term_cols: u16) {
+        let campaign = match self.selected_campaign() {
+            Some(c) => c.clone(),
+            None => return,
+        };
+
+        let repo_dir = {
+            let cand = std::path::PathBuf::from(format!("/home/ubuntu/github-projects/{}", campaign.repo));
+            if cand.exists() {
+                cand
+            } else {
+                self.config.repos_dir().join(&campaign.repo)
+            }
+        };
+
+        if campaign.status == CampaignStatus::Running || campaign.status == CampaignStatus::Claimed {
+            let _ = self.pty.spawn(
+                campaign.id.clone(),
+                "tmux",
+                &["attach", "-t", "codex-live"],
+                &repo_dir,
+                term_rows,
+                term_cols,
+            );
+            self.focused_pane = FocusedPane::Terminal;
+            self.set_message("Connected to live Codex session. [F6 / Tab] returns to sidebar.");
+        } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
+            if let Some(session_id) = find_session_for_campaign(&campaign.id) {
+                let model_flag = format!("model={}", campaign.model);
+                let _ = self.pty.spawn(
+                    campaign.id.clone(),
+                    "codex",
+                    &[
+                        "resume",
+                        &session_id,
+                        "-C",
+                        &repo_dir.to_string_lossy(),
+                        "-c",
+                        "openai_base_url=http://127.0.0.1:8317/v1",
+                        "-c",
+                        "model_catalog_json=/home/ubuntu/.codex/model-catalogs/gateway.json",
+                        "-c",
+                        &model_flag,
+                        "--dangerously-bypass-approvals-and-sandbox",
+                    ],
+                    &repo_dir,
+                    term_rows,
+                    term_cols,
+                );
+                self.focused_pane = FocusedPane::Terminal;
+                self.set_message("Resumed Codex session. [F6 / Tab] returns to sidebar.");
+            } else {
+                self.set_message("No recorded session file found for this campaign.");
+            }
+        }
     }
 
     pub fn handle_modal_key(&mut self, key: KeyEvent) -> bool {
