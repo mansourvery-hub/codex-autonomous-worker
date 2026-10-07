@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Result};
 use chrono::Utc;
 use serde_json::json;
-use crate::campaign::{load_all_campaigns, Campaign, CampaignStatus};
+use crate::campaign::{load_all_campaigns, load_current, Campaign, CampaignStatus};
 use crate::config::AppConfig;
 
 const TMUX_SESSION_NAME: &str = "codex-live";
@@ -22,6 +22,32 @@ impl Supervisor {
     pub async fn run_daemon(&self) -> Result<()> {
         println!("Autopilot 24/7 Autonomous Engineering Daemon started.");
         println!("Tasks directory: {:?}", self.config.tasks_dir());
+
+        // 1. Check for active or orphaned campaign from previous run
+        if let Some(curr) = load_current(&self.config) {
+            let has_session = Command::new("tmux").args(["has-session", "-t", TMUX_SESSION_NAME]).output();
+            if has_session.map(|o| o.status.success()).unwrap_or(false) {
+                println!("Reconnecting supervisor to active campaign #{}...", curr.task_id);
+                let worktree_dir = self.config.worktrees_dir().join(format!("task-{}", curr.task_id));
+                let repo_dir = self.resolve_repo_dir(&curr.repo).unwrap_or_else(|_| self.config.base_dir.clone());
+                let current_iter = curr.iteration.unwrap_or(1);
+                let max_iter = curr.max_iterations.unwrap_or(30);
+
+                let success = self.monitor_session(&worktree_dir, current_iter, max_iter).unwrap_or(false);
+
+                let claimed_path = self.config.tasks_dir().join(format!("{}-campaign.claimed.yaml", curr.task_id));
+                if success {
+                    let _ = self.mark_status(&claimed_path, "done");
+                } else {
+                    let _ = self.mark_status(&claimed_path, "failed");
+                }
+                let _ = fs::remove_file(self.config.current_file());
+                self.cleanup_worktree(&repo_dir, &worktree_dir);
+            } else {
+                println!("Cleaning up stale campaign #{} whose tmux session died.", curr.task_id);
+                let _ = fs::remove_file(self.config.current_file());
+            }
+        }
 
         let mut consecutive_empty = 0;
 
@@ -137,6 +163,16 @@ impl Supervisor {
         let _ = fs::remove_dir_all(worktree_path);
     }
 
+    fn send_keys_to_pane(&self, text: &str) {
+        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-c"]).output();
+        std::thread::sleep(Duration::from_millis(200));
+        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-u"]).output();
+        std::thread::sleep(Duration::from_millis(200));
+        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, text]).output();
+        std::thread::sleep(Duration::from_millis(500));
+        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-m"]).output();
+    }
+
     fn execute_campaign(&self, campaign: &Campaign) -> Result<bool> {
         let repo_dir = self.resolve_repo_dir(&campaign.repo)?;
         let worktree_dir = self.config.worktrees_dir().join(format!("task-{}", campaign.id));
@@ -166,13 +202,29 @@ impl Supervisor {
 Task Description:
 {}", system_prompt, campaign.prompt);
 
-        let success = self.run_codex_heartbeat_loop(
-            &worktree_dir,
-            &full_prompt,
-            &campaign.model,
-            &campaign.id,
-            campaign.max_iterations,
-        )?;
+        let cliproxy_url = &self.config.cliproxy.url;
+        let catalog_json = &self.config.cliproxy.catalog_json;
+
+        // Kill any previous live session
+        let _ = Command::new("tmux").args(["kill-session", "-t", TMUX_SESSION_NAME]).output();
+
+        // Start new tmux session
+        let res = Command::new("tmux")
+            .args(["new-session", "-d", "-s", TMUX_SESSION_NAME, "-x", "140", "-y", "45", "-c", &worktree_dir.to_string_lossy()])
+            .output()?;
+        if !res.status.success() {
+            bail!("Failed to start tmux session: {}", String::from_utf8_lossy(&res.stderr));
+        }
+
+        // Send codex command
+        let escaped_prompt = full_prompt.replace(char::from(39), "'\''");
+        let codex_cmd = format!(
+            "codex -C '{}' -c openai_base_url='{}' -c model='{}' -c model_catalog_json='{}' --dangerously-bypass-approvals-and-sandbox '{}'",
+            worktree_dir.display(), cliproxy_url, campaign.model, catalog_json, escaped_prompt
+        );
+        self.send_keys_to_pane(&codex_cmd);
+
+        let success = self.monitor_session(&worktree_dir, 1, campaign.max_iterations)?;
 
         // Check uncommitted changes
         let status_out = Command::new("git")
@@ -196,41 +248,15 @@ Task Description:
         Ok(success)
     }
 
-    fn run_codex_heartbeat_loop(
+    fn monitor_session(
         &self,
         worktree_path: &Path,
-        full_prompt: &str,
-        model: &str,
-        _task_id: &str,
+        start_iteration: u32,
         max_iterations: u32,
     ) -> Result<bool> {
-        let cliproxy_url = &self.config.cliproxy.url;
-        let catalog_json = &self.config.cliproxy.catalog_json;
         let timeout = Duration::from_secs(self.config.task_timeout_seconds);
-
-        // Kill any previous live session
-        let _ = Command::new("tmux").args(["kill-session", "-t", TMUX_SESSION_NAME]).output();
-
-        // Start new tmux session
-        let res = Command::new("tmux")
-            .args(["new-session", "-d", "-s", TMUX_SESSION_NAME, "-x", "140", "-y", "45", "-c", &worktree_path.to_string_lossy()])
-            .output()?;
-        if !res.status.success() {
-            bail!("Failed to start tmux session: {}", String::from_utf8_lossy(&res.stderr));
-        }
-
-        // Send codex command
-        let escaped_prompt = full_prompt.replace(char::from(39), "'\\''");
-        let codex_cmd = format!(
-            "codex -C '{}' -c openai_base_url='{}' -c model='{}' -c model_catalog_json='{}' --dangerously-bypass-approvals-and-sandbox '{}'",
-            worktree_path.display(), cliproxy_url, model, catalog_json, escaped_prompt
-        );
-        let _ = Command::new("tmux")
-            .args(["send-keys", "-t", TMUX_SESSION_NAME, &codex_cmd, "C-m"])
-            .output();
-
         let start_time = Instant::now();
-        let mut current_iteration = 1;
+        let mut current_iteration = start_iteration;
         let mut consecutive_idle_seconds = 0;
         let mut consecutive_errors = 0;
         let idle_limit = self.config.idle_timeout_seconds.max(15);
@@ -272,13 +298,11 @@ Task Description:
                     let backoff = self.config.rate_limit_backoff_seconds.min(60).max(15);
                     println!("Upstream rate-limit/gateway error (429/502). Cooling down for {}s (attempt {}/4)...", backoff, consecutive_errors);
                     std::thread::sleep(Duration::from_secs(backoff));
-                    let directive = "[Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.";
-                    let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, directive, "C-m"]).output();
+                    self.send_keys_to_pane("[Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.");
                 } else {
                     println!("Upstream API error detected. Injecting recovery directive (attempt {}/4)...", consecutive_errors);
                     std::thread::sleep(Duration::from_secs(5));
-                    let directive = "[Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.";
-                    let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, directive, "C-m"]).output();
+                    self.send_keys_to_pane("[Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.");
                 }
                 consecutive_idle_seconds = 0;
                 std::thread::sleep(Duration::from_secs(3));
@@ -288,6 +312,7 @@ Task Description:
             if is_idle_at_prompt {
                 consecutive_errors = 0;
                 consecutive_idle_seconds += 2;
+
                 if consecutive_idle_seconds >= idle_limit {
                     if current_iteration < max_iterations {
                         println!("Iteration {} complete. Checkpointing and injecting heartbeat directive #{}/{}...", current_iteration, current_iteration + 1, max_iterations);
@@ -310,12 +335,12 @@ Task Description:
                             }
                         }
 
-                        // 2. Inject heartbeat
+                        // 2. Inject heartbeat using two-step send-keys
                         let directive = format!(
-                            "[Supervisor Heartbeat - Iteration #{}/{}] Checkpoint recorded. Proceed with systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.",
+                            "[Supervisor Heartbeat - Iteration #{}/{}] Checkpoint recorded. Proceed with your systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.",
                             current_iteration, max_iterations
                         );
-                        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, &directive, "C-m"]).output();
+                        self.send_keys_to_pane(&directive);
 
                         consecutive_idle_seconds = 0;
                         std::thread::sleep(Duration::from_secs(3));

@@ -70,7 +70,7 @@ fn default_backoff() -> u64 {
     300
 }
 fn default_model() -> String {
-    "agentrouter/deepseek-v4-flash".to_string()
+    "antigravity/gemini-3.8-flash-high".to_string()
 }
 
 impl Default for AppConfig {
