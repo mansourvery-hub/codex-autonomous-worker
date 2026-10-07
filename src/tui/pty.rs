@@ -6,6 +6,7 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
+    widgets::Clear,
     Frame,
 };
 
@@ -15,6 +16,8 @@ pub struct PtySession {
     pub child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
     pub master: Option<Box<dyn MasterPty + Send>>,
     pub active_task_id: Option<String>,
+    pub current_rows: u16,
+    pub current_cols: u16,
 }
 
 impl Default for PtySession {
@@ -31,6 +34,8 @@ impl PtySession {
             child: None,
             master: None,
             active_task_id: None,
+            current_rows: rows,
+            current_cols: cols,
         }
     }
 
@@ -45,20 +50,23 @@ impl PtySession {
     ) -> Result<()> {
         self.kill();
 
+        let target_rows = rows.max(10);
+        let target_cols = cols.max(20);
+
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
-            rows: rows.max(10),
-            cols: cols.max(20),
+            rows: target_rows,
+            cols: target_cols,
             pixel_width: 0,
             pixel_height: 0,
         })?;
 
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(rows.max(10), cols.max(20), 500)));
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(target_rows, target_cols, 500)));
         let parser_clone = Arc::clone(&parser);
 
         let mut reader = pair.master.try_clone_reader()?;
         std::thread::spawn(move || {
-            let mut buf = [0u8; 2048];
+            let mut buf = [0u8; 4096];
             while let Ok(n) = reader.read(&mut buf) {
                 if n == 0 {
                     break;
@@ -74,6 +82,10 @@ impl PtySession {
             cmd.arg(arg);
         }
         cmd.cwd(cwd);
+        // Explicit terminal capabilities
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd.env("LANG", "en_US.UTF-8");
 
         let child = pair.slave.spawn_command(cmd)?;
         let writer = pair.master.take_writer()?;
@@ -83,6 +95,8 @@ impl PtySession {
         self.child = Some(child);
         self.master = Some(pair.master);
         self.active_task_id = Some(task_id);
+        self.current_rows = target_rows;
+        self.current_cols = target_cols;
 
         Ok(())
     }
@@ -99,6 +113,14 @@ impl PtySession {
         if rows == 0 || cols == 0 {
             return;
         }
+        // Deduplicate resize calls to avoid SIGWINCH redraw storm
+        if rows == self.current_rows && cols == self.current_cols {
+            return;
+        }
+
+        self.current_rows = rows;
+        self.current_cols = cols;
+
         if let Some(ref mut m) = self.master {
             let _ = m.resize(PtySize {
                 rows,
@@ -132,12 +154,18 @@ impl PtySession {
         self.writer = None;
         self.master = None;
         self.active_task_id = None;
+        self.current_rows = 0;
+        self.current_cols = 0;
+        self.parser = Arc::new(Mutex::new(vt100::Parser::new(24, 80, 500)));
     }
 
     pub fn render_screen(&self, frame: &mut Frame, area: Rect) {
         if area.width == 0 || area.height == 0 {
             return;
         }
+
+        // 1. Clear destination area so no characters from previous screens bleed through
+        frame.render_widget(Clear, area);
 
         if let Ok(parser) = self.parser.lock() {
             let screen = parser.screen();
@@ -147,9 +175,15 @@ impl PtySession {
 
             for r in 0..max_r {
                 for c in 0..max_c {
+                    let buf_cell = frame.buffer_mut().cell_mut((area.x + c, area.y + r)).unwrap();
                     if let Some(cell) = screen.cell(r, c) {
-                        let buf_cell = frame.buffer_mut().cell_mut((area.x + c, area.y + r)).unwrap();
-                        buf_cell.set_symbol(&cell.contents());
+                        let contents = cell.contents();
+                        // CRITICAL: Blank cells must be explicit whitespace " "
+                        if contents.is_empty() {
+                            buf_cell.set_symbol(" ");
+                        } else {
+                            buf_cell.set_symbol(&contents);
+                        }
 
                         let mut style = Style::default();
                         if cell.bold() {
@@ -160,6 +194,9 @@ impl PtySession {
                         }
                         if cell.underline() {
                             style = style.add_modifier(Modifier::UNDERLINED);
+                        }
+                        if cell.inverse() {
+                            style = style.add_modifier(Modifier::REVERSED);
                         }
 
                         match cell.fgcolor() {
@@ -179,11 +216,14 @@ impl PtySession {
                         }
 
                         buf_cell.set_style(style);
+                    } else {
+                        buf_cell.set_symbol(" ");
+                        buf_cell.set_style(Style::default());
                     }
                 }
             }
 
-            // Draw cursor if visible
+            // Synchronize terminal hardware cursor position if visible
             if !screen.hide_cursor() {
                 let (cursor_r, cursor_c) = screen.cursor_position();
                 if cursor_r < area.height && cursor_c < area.width {

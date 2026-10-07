@@ -108,15 +108,27 @@ impl App {
         }
     }
 
-    pub fn next(&mut self) {
+    pub fn next(&mut self, term_h: u16, term_w: u16) {
         if !self.campaigns.is_empty() {
+            let prev_idx = self.selected_index;
             self.selected_index = (self.selected_index + 1).min(self.campaigns.len() - 1);
+            if self.selected_index != prev_idx {
+                self.sync_pty_with_selection(term_h, term_w);
+            }
         }
     }
 
-    pub fn previous(&mut self) {
+    pub fn previous(&mut self, term_h: u16, term_w: u16) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
+            self.sync_pty_with_selection(term_h, term_w);
+        }
+    }
+
+    pub fn select_index(&mut self, idx: usize, term_h: u16, term_w: u16) {
+        if idx < self.campaigns.len() && idx != self.selected_index {
+            self.selected_index = idx;
+            self.sync_pty_with_selection(term_h, term_w);
         }
     }
 
@@ -138,11 +150,19 @@ impl App {
         self.modal = None;
     }
 
-    pub fn launch_or_attach_pty(&mut self, term_rows: u16, term_cols: u16) {
+    pub fn sync_pty_with_selection(&mut self, term_rows: u16, term_cols: u16) {
         let campaign = match self.selected_campaign() {
             Some(c) => c.clone(),
-            None => return,
+            None => {
+                self.pty.kill();
+                return;
+            }
         };
+
+        // If this campaign is already active in PTY and child is running, keep it
+        if self.pty.active_task_id.as_deref() == Some(&campaign.id) && self.pty.is_running() {
+            return;
+        }
 
         let repo_dir = {
             let cand = std::path::PathBuf::from(format!("/home/ubuntu/github-projects/{}", campaign.repo));
@@ -162,8 +182,6 @@ impl App {
                 term_rows,
                 term_cols,
             );
-            self.focused_pane = FocusedPane::Terminal;
-            self.set_message("Connected to live Codex session. [F6 / Tab] returns to sidebar.");
         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
             if let Some(session_id) = find_session_for_campaign(&campaign.id) {
                 let model_flag = format!("model={}", campaign.model);
@@ -187,15 +205,17 @@ impl App {
                     term_rows,
                     term_cols,
                 );
-                self.focused_pane = FocusedPane::Terminal;
-                self.set_message("Resumed Codex session. [F6 / Tab] returns to sidebar.");
             } else {
-                self.set_message("No recorded session file found for this campaign.");
+                // No session found, kill PTY so clean card is drawn
+                self.pty.kill();
             }
+        } else {
+            // Queued / Pending task -> no PTY needed, show clean info card
+            self.pty.kill();
         }
     }
 
-    pub fn handle_modal_key(&mut self, key: KeyEvent) -> bool {
+    pub fn handle_modal_key(&mut self, key: KeyEvent, term_h: u16, term_w: u16) -> bool {
         let mut should_queue = false;
         if let Some(ref mut modal) = self.modal {
             match modal.step {
@@ -269,6 +289,7 @@ impl App {
                             self.set_message(format!("24/7 Campaign #{} queued for {}!", id, repo));
                             self.refresh();
                             self.selected_index = 0;
+                            self.sync_pty_with_selection(term_h, term_w);
                         }
                         Err(e) => {
                             self.set_message(format!("Error queueing campaign: {}", e));

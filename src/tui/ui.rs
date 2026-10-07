@@ -55,7 +55,7 @@ fn draw_top_banner(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_main_split(frame: &mut Frame, app: &mut App, area: Rect) {
-    // Compact sidebar on the left: fixed 32 columns (cf t3code)
+    // Compact sidebar on the left: 32 columns (cf t3code)
     let sidebar_w = 32.min(area.width.saturating_sub(40));
     let split_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -129,14 +129,14 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
     let is_focused = app.focused_pane == FocusedPane::Terminal;
     let border_color = if is_focused { Color::Green } else { Color::DarkGray };
 
-    let pty_running = app.pty.is_running();
+    let pty_has_session = app.pty.active_task_id.is_some();
 
     let title = if is_focused {
-        " Codex Live Workspace [FOCUSED - F6/Tab to exit] "
-    } else if pty_running {
+        " Codex Live Workspace [FOCUSED - F6/Tab/Esc to exit] "
+    } else if pty_has_session {
         " Codex Live Workspace [Enter to focus & talk] "
     } else {
-        " Codex Workspace & Session [Enter to load] "
+        " Codex Workspace & Session [Queued] "
     };
 
     let block = Block::default()
@@ -147,21 +147,19 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // If PTY is running or has been initialized, render the actual virtual screen!
-    if pty_running || app.pty.active_task_id.is_some() {
-        // Resize PTY if needed
-        app.pty.resize(inner.height, inner.width);
+    // If PTY has active session, render the real virtual screen
+    if pty_has_session {
         app.pty.render_screen(frame, inner);
         return;
     }
 
-    // Otherwise show selected campaign info card
+    // Otherwise show selected campaign info card (e.g. for pending tasks)
     if let Some(c) = app.selected_campaign() {
         let (status_text, status_color) = match c.status {
-            CampaignStatus::Running => ("RUNNING (Live session ready in codex-live)", Color::Green),
+            CampaignStatus::Running => ("RUNNING (Loading interactive session...)", Color::Green),
             CampaignStatus::Claimed => ("CLAIMED (Worktree being provisioned)", Color::Yellow),
-            CampaignStatus::Pending => ("QUEUED (Standing by for supervisor)", Color::Magenta),
-            CampaignStatus::Done => ("COMPLETED (Ready to resume in Codex)", Color::Green),
+            CampaignStatus::Pending => ("QUEUED (Standing by for autonomous supervisor)", Color::Magenta),
+            CampaignStatus::Done => ("COMPLETED", Color::Green),
             CampaignStatus::Failed => ("FAILED", Color::Red),
         };
 
@@ -192,16 +190,12 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
             Span::styled(format!("{} iterations max", c.max_iterations), Style::default().fg(Color::White)),
         ]));
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("─── Action ───────────────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled("─── Status ───────────────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
 
-        if c.status == CampaignStatus::Running {
-            lines.push(Line::from(Span::styled("Press [Enter] to display the live interactive Codex TUI here.", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))));
-            lines.push(Line::from(Span::styled("You will see the agent think, run tools, and can type to it live.", Style::default().fg(Color::Gray))));
-        } else if c.status == CampaignStatus::Done {
-            lines.push(Line::from(Span::styled("Press [Enter] to load this full recorded session in the Codex TUI.", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
-            lines.push(Line::from(Span::styled("Browse all turns, tool outputs, and inspect diffs directly here.", Style::default().fg(Color::Gray))));
+        if c.status == CampaignStatus::Pending {
+            lines.push(Line::from(Span::styled("Campaign is queued in tasks/. The 24/7 supervisor daemon will claim it shortly.", Style::default().fg(Color::DarkGray))));
         } else {
-            lines.push(Line::from(Span::styled("Campaign is queued. Press [Enter] once claimed to connect.", Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled("Session recorded. Press [Enter] to open.", Style::default().fg(Color::Cyan))));
         }
 
         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
@@ -234,19 +228,17 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 fn default_footer_line(app: &App) -> Line<'static> {
     if app.focused_pane == FocusedPane::Terminal {
         Line::from(vec![
-            Span::styled(" [F6 / Tab] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::raw("Return to Sidebar  "),
+            Span::styled(" [F6 / Tab / Esc] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw("Focus Sidebar  "),
             Span::styled("[Type] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw("Interact with Codex  "),
-            Span::styled("[Esc Esc] ", Style::default().fg(Color::Yellow)),
-            Span::raw("Unfocus  "),
+            Span::raw("Talk / Steer Codex Live  "),
         ])
     } else {
         Line::from(vec![
             Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::raw("Open Codex TUI here  "),
+            Span::raw("Focus & Talk  "),
             Span::styled("[n] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw("New 24/7 Campaign  "),
+            Span::raw("New Campaign  "),
             Span::styled("[r] ", Style::default().fg(Color::Cyan)),
             Span::raw("Refresh  "),
             Span::styled("[q] ", Style::default().fg(Color::Red)),

@@ -51,23 +51,30 @@ fn run_loop(
     tick_rate: Duration,
 ) -> Result<()> {
     let mut last_refresh = std::time::Instant::now();
+    let mut pty_initialized = false;
 
     while !app.should_quit {
         terminal.draw(|f| ui::draw(f, app))?;
 
         let (term_cols, term_rows) = crossterm::terminal::size()?;
-        // Right workspace rows/cols
-        let workspace_w = term_cols.saturating_sub(34);
-        let workspace_h = term_rows.saturating_sub(8);
+        // Workspace inner dimensions (sidebar is 32 cols, banners take ~6 lines)
+        let workspace_w = term_cols.saturating_sub(34).max(20);
+        let workspace_h = term_rows.saturating_sub(8).max(10);
+
+        // Auto-load selected task into PTY on startup
+        if !pty_initialized {
+            app.sync_pty_with_selection(workspace_h, workspace_w);
+            pty_initialized = true;
+        }
 
         if event::poll(tick_rate)? {
             match event::read()? {
                 Event::Key(key) => {
                     if app.modal.is_some() {
-                        app.handle_modal_key(key);
+                        app.handle_modal_key(key, workspace_h, workspace_w);
                     } else if app.focused_pane == FocusedPane::Terminal {
                         match key.code {
-                            KeyCode::F(6) | KeyCode::Tab => {
+                            KeyCode::F(6) | KeyCode::Tab | KeyCode::Esc => {
                                 // Toggle focus back to sidebar
                                 app.focused_pane = FocusedPane::Sidebar;
                             }
@@ -85,13 +92,14 @@ fn run_loop(
                                 app.should_quit = true;
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
-                                app.next();
+                                app.next(workspace_h, workspace_w);
                             }
                             KeyCode::Up | KeyCode::Char('k') => {
-                                app.previous();
+                                app.previous(workspace_h, workspace_w);
                             }
                             KeyCode::Char('r') => {
                                 app.refresh();
+                                app.sync_pty_with_selection(workspace_h, workspace_w);
                                 app.set_message("Refreshed campaign queue.");
                             }
                             KeyCode::Char('n') => {
@@ -103,7 +111,12 @@ fn run_loop(
                                 }
                             }
                             KeyCode::Enter => {
-                                app.launch_or_attach_pty(workspace_h, workspace_w);
+                                // If PTY is not running, load it, then focus terminal to talk
+                                app.sync_pty_with_selection(workspace_h, workspace_w);
+                                if app.pty.is_running() {
+                                    app.focused_pane = FocusedPane::Terminal;
+                                    app.set_message("Focused Codex. Type to interact. [F6/Tab/Esc] returns to sidebar.");
+                                }
                             }
                             _ => {}
                         }
@@ -122,9 +135,7 @@ fn run_loop(
                                 let card_height = 4;
                                 if click_y >= start_y {
                                     let clicked_idx = ((click_y - start_y) / card_height) as usize;
-                                    if clicked_idx < app.campaigns.len() {
-                                        app.selected_index = clicked_idx;
-                                    }
+                                    app.select_index(clicked_idx, workspace_h, workspace_w);
                                 }
                             } else {
                                 // Clicked on right workspace -> focus terminal
@@ -134,6 +145,11 @@ fn run_loop(
                             }
                         }
                     }
+                }
+                Event::Resize(new_cols, new_rows) => {
+                    let w = new_cols.saturating_sub(34).max(20);
+                    let h = new_rows.saturating_sub(8).max(10);
+                    app.pty.resize(h, w);
                 }
                 _ => {}
             }
