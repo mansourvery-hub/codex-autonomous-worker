@@ -164,10 +164,11 @@ impl Supervisor {
     }
 
     fn send_keys_to_pane(&self, text: &str) {
-        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-c"]).output();
-        std::thread::sleep(Duration::from_millis(200));
+        // Clear input field without sending SIGINT (C-c kills Codex!)
+        let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "Escape"]).output();
+        std::thread::sleep(Duration::from_millis(150));
         let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-u"]).output();
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(150));
         let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, text]).output();
         std::thread::sleep(Duration::from_millis(500));
         let _ = Command::new("tmux").args(["send-keys", "-t", TMUX_SESSION_NAME, "C-m"]).output();
@@ -363,6 +364,12 @@ Task Description:
         }
 
         let _ = Command::new("tmux").args(["kill-session", "-t", TMUX_SESSION_NAME]).output();
-        Ok(true)
+        let completed = current_iteration >= max_iterations;
+        if completed {
+            println!("Campaign reached iteration budget ({}/{}). Concluded.", current_iteration, max_iterations);
+        } else {
+            println!("Session ended at iteration {}/{}.", current_iteration, max_iterations);
+        }
+        Ok(completed)
     }
 }
