@@ -186,6 +186,7 @@ impl Supervisor {
             "branch": branch_name,
             "started_at": Utc::now().to_rfc3339(),
             "model": campaign.model,
+            "agent": campaign.agent,
             "tmux_session": TMUX_SESSION_NAME,
             "status": "running",
             "iteration": 1,
@@ -206,24 +207,44 @@ Task Description:
         let cliproxy_url = &self.config.cliproxy.url;
         let catalog_json = &self.config.cliproxy.catalog_json;
 
+
+
+        let escaped_prompt = full_prompt.replace(char::from(39), "'\''");
+        let agent_cmd = if campaign.agent == "opencode" {
+            format!(
+                "opencode --auto --prompt '{}' '{}'",
+                escaped_prompt,
+                worktree_dir.display()
+            )
+        } else {
+            format!(
+                "codex -C '{}' -c openai_base_url='{}' -c model='{}' -c model_catalog_json='{}' --dangerously-bypass-approvals-and-sandbox '{}'",
+                worktree_dir.display(), cliproxy_url, campaign.model, catalog_json, escaped_prompt
+            )
+        };
+
         // Kill any previous live session
         let _ = Command::new("tmux").args(["kill-session", "-t", TMUX_SESSION_NAME]).output();
 
-        // Start new tmux session
+        // Start new tmux session running agent directly
         let res = Command::new("tmux")
-            .args(["new-session", "-d", "-s", TMUX_SESSION_NAME, "-x", "140", "-y", "45", "-c", &worktree_dir.to_string_lossy()])
+            .args([
+                "new-session",
+                "-d",
+                "-s",
+                TMUX_SESSION_NAME,
+                "-x",
+                "140",
+                "-y",
+                "45",
+                "-c",
+                &worktree_dir.to_string_lossy(),
+                &agent_cmd,
+            ])
             .output()?;
         if !res.status.success() {
             bail!("Failed to start tmux session: {}", String::from_utf8_lossy(&res.stderr));
         }
-
-        // Send codex command
-        let escaped_prompt = full_prompt.replace(char::from(39), "'\''");
-        let codex_cmd = format!(
-            "codex -C '{}' -c openai_base_url='{}' -c model='{}' -c model_catalog_json='{}' --dangerously-bypass-approvals-and-sandbox '{}'",
-            worktree_dir.display(), cliproxy_url, campaign.model, catalog_json, escaped_prompt
-        );
-        self.send_keys_to_pane(&codex_cmd);
 
         let success = self.monitor_session(&worktree_dir, 1, campaign.max_iterations)?;
 
@@ -284,7 +305,7 @@ Task Description:
                 || pane_text.contains(r#""status":429"#)
                 || pane_text.contains("rate_limit");
 
-            let is_idle_at_prompt = !is_working && (pane_text.contains("Ask Codex to do anything") || pane_text.contains('›'));
+            let is_idle_at_prompt = !is_working && (pane_text.contains("Ask Codex to do anything") || pane_text.contains("Ask anything") || pane_text.contains("ctrl+p commands") || pane_text.contains('›'));
 
             // Handle upstream errors immediately if sitting idle at prompt
             if has_error && is_idle_at_prompt {

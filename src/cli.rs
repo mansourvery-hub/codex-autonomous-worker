@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(name = "autopilot")]
 #[command(author = "Autopilot Contributors")]
-#[command(version = "0.4.0")]
+#[command(version = "0.4.6")]
 #[command(about = "24/7 Autonomous Engineering Daemon and Terminal Control Deck", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -25,6 +25,10 @@ pub enum Commands {
         #[arg(short, long, default_value = "chess-repertoire-srs")]
         repo: String,
 
+        /// Agent engine (codex or opencode)
+        #[arg(short, long, default_value = "codex")]
+        agent: String,
+
         /// Model override
         #[arg(short, long)]
         model: Option<String>,
@@ -42,6 +46,10 @@ pub enum Commands {
         /// Target repository name
         #[arg(short, long)]
         repo: Option<String>,
+
+        /// Agent engine (codex or opencode)
+        #[arg(short, long, default_value = "codex")]
+        agent: String,
 
         /// Model override
         #[arg(short, long)]

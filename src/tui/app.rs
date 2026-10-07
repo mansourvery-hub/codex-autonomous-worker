@@ -16,9 +16,16 @@ pub enum FocusedPane {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModalStep {
     SelectRepo,
+    SelectEngine,
     SelectMode,
     SelectModel,
     EnterPrompt,
+}
+
+#[derive(Debug, Clone)]
+pub struct EngineOption {
+    pub id: &'static str,
+    pub label: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +46,8 @@ pub struct ModalState {
     pub step: ModalStep,
     pub repos: Vec<String>,
     pub selected_repo_idx: usize,
+    pub engines: Vec<EngineOption>,
+    pub selected_engine_idx: usize,
     pub modes: Vec<ModeOption>,
     pub selected_mode_idx: usize,
     pub models: Vec<ModelOption>,
@@ -49,6 +58,17 @@ pub struct ModalState {
 
 impl ModalState {
     pub fn new(available_repos: Vec<String>) -> Self {
+        let engines = vec![
+            EngineOption {
+                id: "codex",
+                label: "OpenAI Codex (Default autonomous worker)",
+            },
+            EngineOption {
+                id: "opencode",
+                label: "OpenCode v2 (Local agent)",
+            },
+        ];
+
         let modes = vec![
             ModeOption {
                 id: "continuous",
@@ -89,6 +109,8 @@ impl ModalState {
             step: ModalStep::SelectRepo,
             repos: available_repos,
             selected_repo_idx: 0,
+            engines,
+            selected_engine_idx: 0,
             modes,
             selected_mode_idx: 0,
             models,
@@ -104,6 +126,10 @@ impl ModalState {
         } else {
             &self.repos[self.selected_repo_idx % self.repos.len()]
         }
+    }
+
+    pub fn selected_engine(&self) -> &EngineOption {
+        &self.engines[self.selected_engine_idx % self.engines.len()]
     }
 
     pub fn selected_mode(&self) -> &ModeOption {
@@ -269,7 +295,17 @@ impl App {
                 term_cols,
             );
         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
-            if let Some(session_id) = find_session_for_campaign(&campaign.id) {
+            if campaign.agent == "opencode" {
+                // Resume OpenCode session or open in repo directory
+                let _ = self.pty.spawn(
+                    campaign.id.clone(),
+                    "opencode",
+                    &["--auto", "--continue", &repo_dir.to_string_lossy()],
+                    &repo_dir,
+                    term_rows,
+                    term_cols,
+                );
+            } else if let Some(session_id) = find_session_for_campaign(&campaign.id) {
                 let model_flag = format!("model={}", campaign.model);
                 let _ = self.pty.spawn(
                     campaign.id.clone(),
@@ -320,6 +356,27 @@ impl App {
                         }
                     }
                     KeyCode::Enter => {
+                        modal.step = ModalStep::SelectEngine;
+                    }
+                    _ => {}
+                },
+                ModalStep::SelectEngine => match key.code {
+                    KeyCode::Esc => {
+                        self.modal = None;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if modal.selected_engine_idx > 0 {
+                            modal.selected_engine_idx -= 1;
+                        } else {
+                            modal.selected_engine_idx = modal.engines.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !modal.engines.is_empty() {
+                            modal.selected_engine_idx = (modal.selected_engine_idx + 1) % modal.engines.len();
+                        }
+                    }
+                    KeyCode::Enter => {
                         modal.step = ModalStep::SelectMode;
                     }
                     _ => {}
@@ -341,12 +398,16 @@ impl App {
                         }
                     }
                     KeyCode::Enter => {
-                        // Adjust default prompt if user picked single
                         if modal.selected_mode().id == "single" {
                             modal.prompt_buffer = "Inspect codebase and resolve open issue".to_string();
                             modal.cursor_pos = modal.prompt_buffer.len();
                         }
-                        modal.step = ModalStep::SelectModel;
+                        if modal.selected_engine().id == "opencode" {
+                            // OpenCode uses its configured provider, skip model step
+                            modal.step = ModalStep::EnterPrompt;
+                        } else {
+                            modal.step = ModalStep::SelectModel;
+                        }
                     }
                     _ => {}
                 },
@@ -413,6 +474,7 @@ impl App {
         if should_queue {
             if let Some(modal) = self.modal.take() {
                 let repo = modal.selected_repo().to_string();
+                let engine_opt = modal.selected_engine();
                 let mode_opt = modal.selected_mode();
                 let model_opt = modal.selected_model();
                 let prompt = modal.prompt_buffer.trim().to_string();
@@ -424,15 +486,16 @@ impl App {
                         &prompt,
                         mode_opt.id,
                         mode_opt.iterations,
-                        Some(model_opt.id),
+                        if engine_opt.id == "opencode" { None } else { Some(model_opt.id) },
+                        Some(engine_opt.id),
                     ) {
                         Ok(id) => {
                             self.set_message(format!(
-                                "{} #{} queued for {} [{}]!",
+                                "{} #{} queued with {} on {}!",
                                 if mode_opt.id == "continuous" { "24/7 Loop" } else { "Task" },
                                 id,
-                                repo,
-                                model_opt.id.split('/').next_back().unwrap_or(model_opt.id)
+                                engine_opt.label.split('(').next().unwrap_or(engine_opt.id).trim(),
+                                repo
                             ));
                             self.refresh();
                             self.selected_index = 0;

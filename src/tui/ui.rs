@@ -98,9 +98,9 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
 
         let mode_label = if c.mode == "continuous" { "⟳ Loop" } else { "⊡ Task" };
         let line3_text = if c.status == CampaignStatus::Running {
-            format!("  {} · {} #{}/{}", c.repo, mode_label, c.iteration, c.max_iterations)
+            format!("  {} · {} · {} #{}/{}", c.repo, c.agent, mode_label, c.iteration, c.max_iterations)
         } else {
-            format!("  {} · {} ({} iters)", c.repo, mode_label, c.max_iterations)
+            format!("  {} · {} · {} ({} iters)", c.repo, c.agent, mode_label, c.max_iterations)
         };
         let line3 = Line::from(vec![
             Span::styled(line3_text, Style::default().fg(Color::DarkGray)),
@@ -132,11 +132,11 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
     let pty_has_session = app.pty.active_task_id.is_some();
 
     let title = if is_focused {
-        " Codex Live Workspace [FOCUSED - F6/Tab to exit] "
+        " Live Workspace [FOCUSED - F6/Tab to exit] "
     } else if pty_has_session {
-        " Codex Live Workspace [Enter to focus & talk] "
+        " Live Workspace [Enter to focus & talk] "
     } else {
-        " Codex Workspace [Standing by] "
+        " Workspace [Standing by] "
     };
 
     let block = Block::default()
@@ -153,12 +153,12 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
 
-    // Otherwise show selected campaign info card (e.g. for pending tasks)
+    // Otherwise show selected campaign info card
     if let Some(c) = app.selected_campaign() {
         let (status_text, status_color) = match c.status {
-            CampaignStatus::Running => ("RUNNING (Live session ready in codex-live)", Color::Green),
+            CampaignStatus::Running => ("RUNNING (Live session ready)", Color::Green),
             CampaignStatus::Claimed => ("CLAIMED (Worktree being provisioned)", Color::Yellow),
-            CampaignStatus::Pending => ("QUEUED (Waiting for active campaign to finish or be stopped)", Color::Magenta),
+            CampaignStatus::Pending => ("QUEUED (Waiting for current campaign to finish)", Color::Magenta),
             CampaignStatus::Done => ("COMPLETED", Color::Green),
             CampaignStatus::Failed => ("FAILED", Color::Red),
         };
@@ -182,7 +182,10 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
             Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Mode:        ", Style::default().fg(Color::Gray)),
+            Span::styled("Engine:      ", Style::default().fg(Color::Gray)),
+            Span::styled(c.agent.to_uppercase(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("    "),
+            Span::styled("Mode: ", Style::default().fg(Color::Gray)),
             Span::styled(mode_desc, Style::default().fg(Color::Yellow)),
         ]));
         lines.push(Line::from(vec![
@@ -192,12 +195,14 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
             Span::styled("Branch: ", Style::default().fg(Color::Gray)),
             Span::styled(c.branch.clone(), Style::default().fg(Color::Yellow)),
         ]));
-        lines.push(Line::from(vec![
-            Span::styled("Model:       ", Style::default().fg(Color::Gray)),
-            Span::styled(c.model.clone(), Style::default().fg(Color::Cyan)),
-        ]));
+        if c.agent != "opencode" {
+            lines.push(Line::from(vec![
+                Span::styled("Model:       ", Style::default().fg(Color::Gray)),
+                Span::styled(c.model.clone(), Style::default().fg(Color::Cyan)),
+            ]));
+        }
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("─── Queue Details ────────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled("─── Status & Details ─────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
 
         if c.status == CampaignStatus::Pending {
             lines.push(Line::from(Span::styled("This campaign is queued waiting for the current active campaign to finish.", Style::default().fg(Color::Magenta))));
@@ -239,16 +244,16 @@ fn default_footer_line(app: &App) -> Line<'static> {
             Span::styled(" [F6 / Tab / Alt-←] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::raw("Focus Sidebar  "),
             Span::styled("[Esc] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::raw("Interrupt Codex  "),
+            Span::raw("Interrupt Agent  "),
             Span::styled("[Type] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::raw("Steer Live  "),
         ])
     } else {
         Line::from(vec![
             Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::raw("Talk to Codex  "),
+            Span::raw("Talk to Agent  "),
             Span::styled("[n] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw("New (Loop/Task)  "),
+            Span::raw("New Campaign  "),
             Span::styled("[x] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw("Stop Active  "),
             Span::styled("[r] ", Style::default().fg(Color::Cyan)),
@@ -283,7 +288,26 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign [1/4]: Select Target Repository (Enter to confirm, Esc to cancel) ")
+                    .title(" New Campaign: Select Target Repository (Enter to confirm, Esc to cancel) ")
+                    .border_style(Style::default().fg(Color::Cyan)));
+
+            frame.render_widget(list, modal_area);
+        }
+        ModalStep::SelectEngine => {
+            let items: Vec<ListItem> = modal.engines.iter().enumerate().map(|(idx, e)| {
+                let is_sel = idx == modal.selected_engine_idx;
+                let prefix = if is_sel { "▸ " } else { "  " };
+                let mut item = ListItem::new(format!("{}{}", prefix, e.label));
+                if is_sel {
+                    item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+                }
+                item
+            }).collect();
+
+            let list = List::new(items)
+                .block(Block::default()
+                    .borders(Borders::ALL)
+                    .title(" New Campaign: Select Agent Engine (Codex vs OpenCode) ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -302,7 +326,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign [2/4]: Select Execution Mode (Loop vs Single Task) ")
+                    .title(" New Campaign: Select Execution Mode (Loop vs Single Task) ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -321,14 +345,15 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign [3/4]: Select Model ")
+                    .title(" New Campaign: Select Model for Codex ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
         }
         ModalStep::EnterPrompt => {
             let mode_tag = if modal.selected_mode().id == "continuous" { "24/7 Loop (30 iters)" } else { "Single Task" };
-            let title = format!(" New Campaign [4/4]: [{}] · {} ", modal.selected_repo(), mode_tag);
+            let engine_tag = modal.selected_engine().id.to_uppercase();
+            let title = format!(" New Campaign: [{}] · [{}] · {} ", modal.selected_repo(), engine_tag, mode_tag);
 
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -343,7 +368,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
                 .constraints([Constraint::Length(1), Constraint::Min(2), Constraint::Length(1)])
                 .split(inner);
 
-            let label = Paragraph::new(format!("Model: {} │ Type objective:", modal.selected_model().id))
+            let label = Paragraph::new(format!("Engine: {} │ Enter campaign objective:", engine_tag))
                 .style(Style::default().fg(Color::Gray));
             frame.render_widget(label, chunks[0]);
 

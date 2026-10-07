@@ -52,6 +52,7 @@ pub struct Campaign {
     pub max_iterations: u32,
     pub branch: String,
     pub model: String,
+    pub agent: String,
     pub age: String,
     pub file_path: PathBuf,
 }
@@ -65,6 +66,7 @@ struct RawTaskFile {
     pub mode: Option<String>,
     pub iterations: Option<u32>,
     pub model: Option<String>,
+    pub agent: Option<String>,
     pub priority: Option<String>,
     pub updated_at: Option<String>,
 }
@@ -143,11 +145,11 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
 
         let raw: RawTaskFile = if path.extension().map(|e| e == "json").unwrap_or(false) {
             serde_json::from_str(&content).unwrap_or(RawTaskFile {
-                id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, priority: None, updated_at: None,
+                id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
             })
         } else {
             serde_yaml::from_str(&content).unwrap_or(RawTaskFile {
-                id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, priority: None, updated_at: None,
+                id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
             })
         };
 
@@ -157,6 +159,7 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
         let mode = raw.mode.unwrap_or_else(|| "continuous".to_string());
         let max_iterations = raw.iterations.unwrap_or(20);
         let model = raw.model.unwrap_or_else(|| config.default_model.clone());
+        let agent = raw.agent.unwrap_or_else(|| "codex".to_string());
         let branch = format!("agent/task-{}", id);
         let age = format_duration_ago(mtime);
         let iteration = if is_active {
@@ -175,6 +178,7 @@ pub fn load_all_campaigns(config: &AppConfig) -> Vec<Campaign> {
             max_iterations,
             branch,
             model,
+            agent,
             age,
             file_path: path,
         });
@@ -303,6 +307,7 @@ pub fn queue_campaign(
     mode: &str,
     iterations: u32,
     model: Option<&str>,
+    agent: Option<&str>,
 ) -> Result<String> {
     let tasks_dir = config.tasks_dir();
     fs::create_dir_all(&tasks_dir)?;
@@ -330,6 +335,7 @@ pub fn queue_campaign(
         mode: Some(mode.to_string()),
         iterations: Some(iterations),
         model: Some(model.unwrap_or(&config.default_model).to_string()),
+        agent: Some(agent.unwrap_or("codex").to_string()),
         priority: Some("high".to_string()),
         updated_at: Some(Utc::now().to_rfc3339()),
     };

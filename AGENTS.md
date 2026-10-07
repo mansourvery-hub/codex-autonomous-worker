@@ -16,8 +16,8 @@
 - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
 - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
 - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
-- `autopilot loop [prompt]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
-- `autopilot queue "prompt"`: Queues a new continuous engineering campaign.
+- `autopilot loop [prompt] [--agent <codex|opencode>]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+- `autopilot queue "prompt" [--agent <codex|opencode>]`: Queues a new continuous engineering campaign.
 - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
 - `autopilot current`: Shows details for the currently active campaign.
 - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).

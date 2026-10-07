@@ -29,7 +29,7 @@ fn test_queue_campaign_in_temp_dir() {
     let mut config = AppConfig::default();
     config.base_dir = temp_dir.path().to_path_buf();
 
-    let id = queue_campaign(&config, "test-repo", "Test objective", "continuous", 15, None).expect("Queue campaign");
+    let id = queue_campaign(&config, "test-repo", "Test objective", "continuous", 15, None, Some("codex")).expect("Queue campaign");
     assert_eq!(id, "001");
 
     let campaigns = load_all_campaigns(&config);
@@ -37,5 +37,16 @@ fn test_queue_campaign_in_temp_dir() {
     assert_eq!(campaigns[0].id, "001");
     assert_eq!(campaigns[0].repo, "test-repo");
     assert_eq!(campaigns[0].prompt, "Test objective");
+    assert_eq!(campaigns[0].agent, "codex");
     assert_eq!(campaigns[0].status, CampaignStatus::Pending);
+
+    // Queue another campaign with opencode
+    let id2 = queue_campaign(&config, "test-repo", "Opencode test", "single", 1, None, Some("opencode")).expect("Queue opencode campaign");
+    assert_eq!(id2, "002");
+
+    let campaigns2 = load_all_campaigns(&config);
+    assert_eq!(campaigns2.len(), 2);
+    let opencode_c = campaigns2.iter().find(|c| c.id == "002").unwrap();
+    assert_eq!(opencode_c.agent, "opencode");
+    assert_eq!(opencode_c.mode, "single");
 }

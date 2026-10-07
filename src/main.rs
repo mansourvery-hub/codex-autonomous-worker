@@ -16,9 +16,9 @@ async fn main() -> Result<()> {
         None | Some(Commands::Tui) => {
             run_tui(config)?;
         }
-        Some(Commands::Loop { prompt, repo, model, iterations }) => {
+        Some(Commands::Loop { prompt, repo, agent, model, iterations }) => {
             let prompt_text = prompt.join(" ").trim().to_string();
-            let id = queue_campaign(&config, &repo, &prompt_text, "continuous", iterations, model.as_deref())?;
+            let id = queue_campaign(&config, &repo, &prompt_text, "continuous", iterations, model.as_deref(), Some(&agent))?;
             println!("[32m✔ Launched 24/7 Autonomous Campaign #{} for {}[0m", id, repo);
             println!("  Objective: {}", prompt_text);
             println!("  Budget:    {} iterations", iterations);
@@ -27,14 +27,14 @@ async fn main() -> Result<()> {
             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
             run_tui(config)?;
         }
-        Some(Commands::Queue { prompt, repo, model, iterations }) => {
+        Some(Commands::Queue { prompt, repo, agent, model, iterations }) => {
             let prompt_text = prompt.join(" ").trim().to_string();
             if prompt_text.is_empty() {
                 eprintln!("Error: Objective cannot be empty.");
                 std::process::exit(1);
             }
             let repo_name = repo.unwrap_or_else(|| "chess-repertoire-srs".to_string());
-            let id = queue_campaign(&config, &repo_name, &prompt_text, "continuous", iterations, model.as_deref())?;
+            let id = queue_campaign(&config, &repo_name, &prompt_text, "continuous", iterations, model.as_deref(), Some(&agent))?;
             println!("[32m✔ Autonomous campaign #{} queued for {}:[0m", id, repo_name);
             println!("  Objective: {}", prompt_text);
             println!("  Budget:    {} iterations", iterations);
@@ -55,7 +55,7 @@ Launch 'autopilot' to open the control deck.");
                     CampaignStatus::Done => ("[32m", "[DONE   ]"),
                     CampaignStatus::Failed => ("[31m", "[ERROR  ]"),
                 };
-                println!("  {}{}[0m #{} [{}] {} ({})", color, pill, c.id, c.repo, c.prompt, c.age);
+                println!("  {}{}[0m #{} [{}] [{}] {} ({})", color, pill, c.id, c.agent, c.repo, c.prompt, c.age);
             }
         }
         Some(Commands::Current) => {

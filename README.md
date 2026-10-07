@@ -110,8 +110,11 @@ autopilot
 Queue long-running iterative campaigns from any directory:
 
 ```bash
-# Queue a continuous multi-iteration engineering campaign:
+# Queue a continuous multi-iteration engineering campaign (defaults to Codex):
 autopilot queue "Audit timezone handling in review_history, add regression tests, and fix edge cases"
+
+# Run with OpenCode instead of Codex:
+autopilot queue "Audit domain models and run verification" --agent opencode
 
 # Specify explicit repository, model, and iteration budget:
 autopilot queue "Harden authentication flow and migrations" -r my-app -m agentrouter/deepseek-v4-flash --iterations 25
