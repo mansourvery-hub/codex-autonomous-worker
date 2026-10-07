@@ -9,7 +9,7 @@
   "poll_interval_seconds": 15,
   "rate_limit_backoff_seconds": 300,
   "max_consecutive_failures": 5,
-  "default_model": "agentrouter/deepseek-v4-flash",
+  "default_model": "antigravity/gemini-3.8-flash-high",
   "cliproxy": {
     "url": "http://127.0.0.1:8317/v1",
     "check_health": true,
