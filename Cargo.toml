@@ -1,0 +1,25 @@
+[package]
+name = "autopilot"
+version = "0.4.0"
+edition = "2021"
+authors = ["Autopilot Contributors"]
+description = "24/7 Autonomous Engineering Daemon and Terminal Control Deck"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+dirs = "5"
+
+[[bin]]
+name = "autopilot"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"

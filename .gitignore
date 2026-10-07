@@ -5,3 +5,5 @@ __pycache__/
 .agent_prompt.txt
 .run_agent.sh
 
+target/
+*.pdb

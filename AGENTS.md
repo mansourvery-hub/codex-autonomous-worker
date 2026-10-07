@@ -2,37 +2,38 @@
 
 ## Project Structure & Module Organization
 
-- `worker.py`: Core 24/7 autonomous daemon supervising campaigns, git worktrees, heartbeat loops, and Codex execution.
-- `bin/autopilot`: Dedicated entrypoint and CLI for autonomous campaigns, status reporting, and the TUI control deck.
-- `bin/task`: Compatibility wrapper delegating directly to `bin/autopilot`.
-- `bin/sidebar.py`: Interactive split-screen TUI control deck for navigating campaigns and monitoring live sessions.
-- `prompts/task_prompt.md`: Standard instructions injected into autonomous agent runs (discovery, PLAN.md, test-first).
-- `config/`: Configuration templates (e.g., `config.example.json`).
+- `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
+- `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
+- `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
+- `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
+- `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
+- `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
 - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
-- `examples/`: Starter campaign definition files (e.g., `examples/001-starter-task.yaml`).
+- `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
 
 ## Build, Test, and Development Commands
 
-- `./install.sh`: Sets up runtime directories, installs `autopilot` into `~/.local/bin`, and registers systemd units.
-- `autopilot` or `autopilot tui`: Launches the keyboard-navigable split-screen TUI control deck.
-- `autopilot queue "prompt"`: Queues a new continuous-mode campaign for autonomous execution.
-- `autopilot list`: Displays active, queued, and completed campaigns.
-- `autopilot current`: Shows details for the currently executing campaign.
-- `autopilot logs --last`: Views the most recent campaign execution output log.
-- `python3 worker.py`: Runs the autonomous supervisor daemon locally for debugging.
+- `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
+- `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
+- `autopilot`: Launches the keyboard-navigable Ratatui control deck.
+- `autopilot loop [prompt]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+- `autopilot queue "prompt"`: Queues a new continuous engineering campaign.
+- `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
+- `autopilot current`: Shows details for the currently active campaign.
+- `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
 
 ## Coding Style & Naming Conventions
 
-- **Language & Style**: Python 3.10+ adhering to PEP 8 standards with 4-space indentation.
-- **File System Operations**: Use `pathlib.Path` instead of raw string concatenation for robust path manipulation.
-- **Naming Patterns**: Use `snake_case` for functions and variables, `PascalCase` for classes, and `kebab-case` for campaign and configuration files.
+- **Language & Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
+- **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
+- **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
 
 ## Testing Guidelines
 
-- **Validation**: Verify CLI commands, TUI layout transitions, and daemon state transitions locally before submitting changes.
-- **Isolation**: Test changes without polluting primary repository checkouts or production runtime spool directories (`~/srv-codex`).
+- **Validation**: Run `cargo test --all` before submitting any change.
+- **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
 
 ## Commit & Pull Request Guidelines
 
-- **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(tui): introduce Autopilot control deck` or `feat(core): implement continuous autonomous loop`.
-- **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps. Always work on isolated feature branches and never commit directly to `main`.
+- **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
+- **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.

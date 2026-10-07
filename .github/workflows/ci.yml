@@ -12,24 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          pip install pyyaml
+      - name: Run Cargo Tests
+        run: cargo test --all
 
-      - name: Compile Python scripts
-        run: |
-          python3 -m py_compile worker.py bin/autopilot bin/sidebar.py bin/task
+      - name: Build Release Binary
+        run: cargo build --release
 
       - name: Check shell scripts
-        run: |
-          bash -n install.sh
-
-      - name: Run test suite
-        run: |
-          python3 -m unittest discover -s tests -p "test_*.py" -v
+        run: bash -n install.sh

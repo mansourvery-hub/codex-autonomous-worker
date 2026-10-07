@@ -9,7 +9,7 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/codex-worker
 
-ExecStart=/usr/bin/python3 /home/ubuntu/codex-worker/worker.py
+ExecStart=/home/ubuntu/.local/bin/autopilot daemon
 
 Restart=always
 RestartSec=30
