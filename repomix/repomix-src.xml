@@ -1029,7 +1029,158 @@ repomix.md</directory_structure><files>This section contains the contents of the
 49:     let opencode_c = campaigns2.iter().find(|c| c.id == &quot;002&quot;).unwrap();
 50:     assert_eq!(opencode_c.agent, &quot;opencode&quot;);
 51:     assert_eq!(opencode_c.mode, &quot;single&quot;);
-52: }</file><file path="README.md">  1: # Codex Autonomous Worker
+52: }</file><file path="src/cli.rs">  1: use clap::{Parser, Subcommand};
+  2: 
+  3: #[derive(Parser, Debug)]
+  4: #[command(name = &quot;autopilot&quot;)]
+  5: #[command(author = &quot;Autopilot Contributors&quot;)]
+  6: #[command(version = &quot;0.4.6&quot;)]
+  7: #[command(about = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;, long_about = None)]
+  8: pub struct Cli {
+  9:     #[command(subcommand)]
+ 10:     pub command: Option&lt;Commands&gt;,
+ 11: }
+ 12: 
+ 13: #[derive(Subcommand, Debug)]
+ 14: pub enum Commands {
+ 15:     /// Launch the split-screen TUI control deck
+ 16:     Tui,
+ 17: 
+ 18:     /// Launch a 24/7 autonomous continuous loop and open the control deck
+ 19:     Loop {
+ 20:         /// Campaign objective
+ 21:         #[arg(default_value = &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;)]
+ 22:         prompt: Vec&lt;String&gt;,
+ 23: 
+ 24:         /// Target repository name
+ 25:         #[arg(short, long, default_value = &quot;chess-repertoire-srs&quot;)]
+ 26:         repo: String,
+ 27: 
+ 28:         /// Agent engine (codex or opencode)
+ 29:         #[arg(short, long, default_value = &quot;codex&quot;)]
+ 30:         agent: String,
+ 31: 
+ 32:         /// Model override
+ 33:         #[arg(short, long)]
+ 34:         model: Option&lt;String&gt;,
+ 35: 
+ 36:         /// Iterations budget
+ 37:         #[arg(long, default_value_t = 30)]
+ 38:         iterations: u32,
+ 39:     },
+ 40: 
+ 41:     /// Queue a new autonomous engineering task
+ 42:     #[command(alias = &quot;task&quot;)]
+ 43:     Queue {
+ 44:         /// Campaign objective
+ 45:         prompt: Vec&lt;String&gt;,
+ 46: 
+ 47:         /// Target repository name
+ 48:         #[arg(short, long)]
+ 49:         repo: Option&lt;String&gt;,
+ 50: 
+ 51:         /// Agent engine (codex or opencode)
+ 52:         #[arg(short, long, default_value = &quot;codex&quot;)]
+ 53:         agent: String,
+ 54: 
+ 55:         /// Model override
+ 56:         #[arg(short, long)]
+ 57:         model: Option&lt;String&gt;,
+ 58: 
+ 59:         /// Iteration budget for continuous loop
+ 60:         #[arg(long, default_value_t = 20)]
+ 61:         iterations: u32,
+ 62:     },
+ 63: 
+ 64:     /// List active, queued, and completed tasks
+ 65:     List,
+ 66: 
+ 67:     /// Show currently running tasks details
+ 68:     Current,
+ 69: 
+ 70:     /// Show completed tasks history
+ 71:     History {
+ 72:         #[arg(short = &apos;n&apos;, long, default_value_t = 10)]
+ 73:         count: usize,
+ 74:     },
+ 75: 
+ 76:     /// View or follow logs
+ 77:     Logs {
+ 78:         #[arg(short, long)]
+ 79:         follow: bool,
+ 80: 
+ 81:         #[arg(short, long, default_value_t = 30)]
+ 82:         lines: usize,
+ 83: 
+ 84:         #[arg(long)]
+ 85:         last: bool,
+ 86:     },
+ 87: 
+ 88:     /// Archive completed or failed tasks to keep the active list clean
+ 89:     Archive {
+ 90:         /// Task ID to archive (e.g. 001)
+ 91:         task_id: Option&lt;String&gt;,
+ 92: 
+ 93:         /// Archive all completed and failed tasks
+ 94:         #[arg(long)]
+ 95:         all: bool,
+ 96: 
+ 97:         /// List archived tasks
+ 98:         #[arg(long)]
+ 99:         list: bool,
+100:     },
+101: 
+102:     /// Unarchive tasks back into the active list
+103:     Unarchive {
+104:         /// Task ID to restore (e.g. 001)
+105:         task_id: Option&lt;String&gt;,
+106: 
+107:         /// Unarchive all archived tasks
+108:         #[arg(long)]
+109:         all: bool,
+110:     },
+111: 
+112:     /// Run the 24/7 background supervisor daemon (used by systemd)
+113:     Daemon,
+114: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
+ 2: 
+ 3: ## Project Structure &amp; Module Organization
+ 4: 
+ 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
+ 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
+ 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
+ 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
+ 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
+10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
+11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
+12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
+13: 
+14: ## Build, Test, and Development Commands
+15: 
+16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
+17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
+18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
+19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
+21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
+22: - `autopilot current`: Shows details for the currently active campaign.
+23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
+24: 
+25: ## Coding Style &amp; Naming Conventions
+26: 
+27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
+28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
+29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
+30: 
+31: ## Testing Guidelines
+32: 
+33: - **Validation**: Run `cargo test --all` before submitting any change.
+34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
+35: 
+36: ## Commit &amp; Pull Request Guidelines
+37: 
+38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
+39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="README.md">  1: # Codex Autonomous Worker
   2: 
   3: An always-on, self-supervised autonomous engineering daemon that uses OpenAI Codex (`codex exec`) as a disposable worker process, supervised by `systemd`, backed by isolated Git worktrees, persistent journaling, and multi-tier rate limit mitigation.
   4: 
@@ -1207,166 +1358,9 @@ repomix.md</directory_structure><files>This section contains the contents of the
 176: 
 177: ---
 178: 
-179: ## Support
+179: ## License
 180: 
-181: Building small, useful software — if this project saves you time, consider [buying me a coffee](https://buymeacoffee.com/cassandre60) to help keep it maintained.
-182: 
-183: &lt;a href=&quot;https://buymeacoffee.com/cassandre60&quot;&gt;&lt;img src=&quot;https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png&quot; width=&quot;150&quot; alt=&quot;Buy Me A Coffee&quot;&gt;&lt;/a&gt;
-184: 
-185: ## License
-186: 
-187: MIT</file><file path="src/cli.rs">  1: use clap::{Parser, Subcommand};
-  2: 
-  3: #[derive(Parser, Debug)]
-  4: #[command(name = &quot;autopilot&quot;)]
-  5: #[command(author = &quot;Autopilot Contributors&quot;)]
-  6: #[command(version = &quot;0.4.6&quot;)]
-  7: #[command(about = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;, long_about = None)]
-  8: pub struct Cli {
-  9:     #[command(subcommand)]
- 10:     pub command: Option&lt;Commands&gt;,
- 11: }
- 12: 
- 13: #[derive(Subcommand, Debug)]
- 14: pub enum Commands {
- 15:     /// Launch the split-screen TUI control deck
- 16:     Tui,
- 17: 
- 18:     /// Launch a 24/7 autonomous continuous loop and open the control deck
- 19:     Loop {
- 20:         /// Campaign objective
- 21:         #[arg(default_value = &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;)]
- 22:         prompt: Vec&lt;String&gt;,
- 23: 
- 24:         /// Target repository name
- 25:         #[arg(short, long, default_value = &quot;chess-repertoire-srs&quot;)]
- 26:         repo: String,
- 27: 
- 28:         /// Agent engine (codex or opencode)
- 29:         #[arg(short, long, default_value = &quot;codex&quot;)]
- 30:         agent: String,
- 31: 
- 32:         /// Model override
- 33:         #[arg(short, long)]
- 34:         model: Option&lt;String&gt;,
- 35: 
- 36:         /// Iterations budget
- 37:         #[arg(long, default_value_t = 30)]
- 38:         iterations: u32,
- 39:     },
- 40: 
- 41:     /// Queue a new autonomous engineering task
- 42:     #[command(alias = &quot;task&quot;)]
- 43:     Queue {
- 44:         /// Campaign objective
- 45:         prompt: Vec&lt;String&gt;,
- 46: 
- 47:         /// Target repository name
- 48:         #[arg(short, long)]
- 49:         repo: Option&lt;String&gt;,
- 50: 
- 51:         /// Agent engine (codex or opencode)
- 52:         #[arg(short, long, default_value = &quot;codex&quot;)]
- 53:         agent: String,
- 54: 
- 55:         /// Model override
- 56:         #[arg(short, long)]
- 57:         model: Option&lt;String&gt;,
- 58: 
- 59:         /// Iteration budget for continuous loop
- 60:         #[arg(long, default_value_t = 20)]
- 61:         iterations: u32,
- 62:     },
- 63: 
- 64:     /// List active, queued, and completed tasks
- 65:     List,
- 66: 
- 67:     /// Show currently running tasks details
- 68:     Current,
- 69: 
- 70:     /// Show completed tasks history
- 71:     History {
- 72:         #[arg(short = &apos;n&apos;, long, default_value_t = 10)]
- 73:         count: usize,
- 74:     },
- 75: 
- 76:     /// View or follow logs
- 77:     Logs {
- 78:         #[arg(short, long)]
- 79:         follow: bool,
- 80: 
- 81:         #[arg(short, long, default_value_t = 30)]
- 82:         lines: usize,
- 83: 
- 84:         #[arg(long)]
- 85:         last: bool,
- 86:     },
- 87: 
- 88:     /// Archive completed or failed tasks to keep the active list clean
- 89:     Archive {
- 90:         /// Task ID to archive (e.g. 001)
- 91:         task_id: Option&lt;String&gt;,
- 92: 
- 93:         /// Archive all completed and failed tasks
- 94:         #[arg(long)]
- 95:         all: bool,
- 96: 
- 97:         /// List archived tasks
- 98:         #[arg(long)]
- 99:         list: bool,
-100:     },
-101: 
-102:     /// Unarchive tasks back into the active list
-103:     Unarchive {
-104:         /// Task ID to restore (e.g. 001)
-105:         task_id: Option&lt;String&gt;,
-106: 
-107:         /// Unarchive all archived tasks
-108:         #[arg(long)]
-109:         all: bool,
-110:     },
-111: 
-112:     /// Run the 24/7 background supervisor daemon (used by systemd)
-113:     Daemon,
-114: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
- 2: 
- 3: ## Project Structure &amp; Module Organization
- 4: 
- 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
- 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
- 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
- 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
- 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
-10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
-11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
-12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
-13: 
-14: ## Build, Test, and Development Commands
-15: 
-16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
-17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
-18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
-19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
-20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
-21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
-22: - `autopilot current`: Shows details for the currently active campaign.
-23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
-24: 
-25: ## Coding Style &amp; Naming Conventions
-26: 
-27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
-28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
-29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
-30: 
-31: ## Testing Guidelines
-32: 
-33: - **Validation**: Run `cargo test --all` before submitting any change.
-34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
-35: 
-36: ## Commit &amp; Pull Request Guidelines
-37: 
-38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
-39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/campaign.rs">  1: use std::fs;
+181: MIT</file><file path="src/campaign.rs">  1: use std::fs;
   2: use std::path::{Path, PathBuf};
   3: use std::time::SystemTime;
   4: use anyhow::{Context, Result};
