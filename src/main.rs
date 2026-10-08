@@ -35,14 +35,14 @@ async fn main() -> Result<()> {
             }
             let repo_name = repo.unwrap_or_else(|| "chess-repertoire-srs".to_string());
             let id = queue_campaign(&config, &repo_name, &prompt_text, "continuous", iterations, model.as_deref(), Some(&agent))?;
-            println!("[32m✔ Autonomous campaign #{} queued for {}:[0m", id, repo_name);
+            println!("[32m✔ Autonomous task #{} queued for {}:[0m", id, repo_name);
             println!("  Objective: {}", prompt_text);
             println!("  Budget:    {} iterations", iterations);
             println!("
 Launch 'autopilot' to open the control deck.");
         }
         Some(Commands::List) => {
-            println!("[1m=== Active & Queued Autonomous Campaigns ===[0m");
+            println!("[1m=== Active & Queued Autonomous Tasks ===[0m");
             let campaigns = load_all_campaigns(&config);
             if campaigns.is_empty() {
                 println!("  (Queue is empty)");
@@ -66,7 +66,7 @@ Launch 'autopilot' to open the control deck.");
                 .collect();
 
             if !active.is_empty() {
-                println!("[1;32mCurrently Active Parallel Campaigns ({}):[0m", active.len());
+                println!("[1;32mCurrently Active Parallel Tasks ({}):[0m", active.len());
                 for c in &active {
                     let status_str = match c.status {
                         CampaignStatus::Running => "RUNNING",
@@ -81,14 +81,14 @@ Launch 'autopilot' to open the control deck.");
                 println!("
 Launch 'autopilot' to enter the live control deck.");
             } else {
-                println!("No autonomous campaign currently executing.");
+                println!("No autonomous tasks currently executing.");
             }
         }
         Some(Commands::History { count }) => {
             let hist_file = config.history_file();
             if hist_file.exists() {
                 if let Ok(content) = std::fs::read_to_string(&hist_file) {
-                    println!("[1m=== Recent Campaign History ===[0m");
+                    println!("[1m=== Recent Task History ===[0m");
                     let lines: Vec<&str> = content.lines().collect();
                     for line in lines.into_iter().rev().take(count) {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {

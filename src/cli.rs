@@ -38,7 +38,8 @@ pub enum Commands {
         iterations: u32,
     },
 
-    /// Queue a new autonomous engineering campaign
+    /// Queue a new autonomous engineering task
+    #[command(alias = "task")]
     Queue {
         /// Campaign objective
         prompt: Vec<String>,
@@ -60,13 +61,13 @@ pub enum Commands {
         iterations: u32,
     },
 
-    /// List active, queued, and completed campaigns
+    /// List active, queued, and completed tasks
     List,
 
-    /// Show currently running campaign details
+    /// Show currently running tasks details
     Current,
 
-    /// Show completed campaigns history
+    /// Show completed tasks history
     History {
         #[arg(short = 'n', long, default_value_t = 10)]
         count: usize,

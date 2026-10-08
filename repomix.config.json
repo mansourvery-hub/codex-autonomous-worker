@@ -1,0 +1,44 @@
+{
+  "output": {
+    "filePath": "repomix/repomix-full.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": true,
+    "copyToClipboard": false,
+    "topFilesLength": 10
+  },
+  "include": [
+    "src/**",
+    "prompts/**",
+    "systemd/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "AGENTS.md",
+    "repomix.md"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "target/**",
+      "repomix/**",
+      ".git/**",
+      "srv-codex/**",
+      "worktrees/**",
+      "tasks/**",
+      "logs/**",
+      "state/**",
+      "**/*.pyc",
+      "**/__pycache__/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}

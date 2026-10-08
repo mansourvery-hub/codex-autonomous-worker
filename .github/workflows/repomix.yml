@@ -1,0 +1,64 @@
+name: Repomix Snapshots
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repomix:
+    name: Generate Repomix Codebase Snapshots
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create repomix directory
+        run: mkdir -p repomix
+
+      - name: Generate full codebase XML snapshot
+        run: |
+          npx --yes repomix \
+            --style xml \
+            --output repomix/repomix-full.xml \
+            --ignore "target/**,repomix/**,.git/**,srv-codex/**,worktrees/**,tasks/**,logs/**,state/**"
+
+      - name: Generate compact source & prompts XML snapshot (optimized for web LLMs)
+        run: |
+          npx --yes repomix \
+            --style xml \
+            --output repomix/repomix-src.xml \
+            --include "src/**,prompts/**,Cargo.toml,README.md,AGENTS.md,repomix.md"
+
+      - name: Upload Repomix artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: repomix-snapshots
+          path: repomix/
+          retention-days: 14
+
+      - name: Commit and push snapshots on main branch
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action [Repomix]"
+          git add repomix/
+          if git diff --staged --quiet; then
+            echo "No changes in repomix snapshots."
+          else
+            git commit -m "chore(ci): update repomix snapshots [skip ci]"
+            git push
+          fi

@@ -1,0 +1,3855 @@
+<repomix><file_summary>This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+The content has been processed where line numbers have been added, content has been formatted for parsing in xml style.<purpose>This file contains a packed representation of a subset of the repository&apos;s contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.</purpose><file_format>The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file</file_format><usage_guidelines>- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.</usage_guidelines><notes>- Some files may have been excluded based on .gitignore rules and Repomix&apos;s configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: src/**, prompts/**, systemd/**, tests/**, Cargo.toml, Cargo.lock, README.md, AGENTS.md, repomix.md, src/**, prompts/**, Cargo.toml, README.md, AGENTS.md, repomix.md
+- Files matching these patterns are excluded: target/**, repomix/**, .git/**, srv-codex/**, worktrees/**, tasks/**, logs/**, state/**, **/*.pyc, **/__pycache__/**
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Line numbers have been added to the beginning of each line
+- Content has been formatted for parsing in xml style
+- Files are sorted by Git change count (files with more changes are at the bottom)</notes></file_summary><directory_structure>prompts/
+  default_task.md
+  heartbeat.md
+  rate_limit.md
+  recovery.md
+  system_prompt.md
+  task_prompt.md
+src/
+  tui/
+    app.rs
+    mod.rs
+    pty.rs
+    ui.rs
+  campaign.rs
+  cli.rs
+  config.rs
+  lib.rs
+  main.rs
+  models.rs
+  prompts.rs
+  supervisor.rs
+systemd/
+  cliproxyapi.service
+  codex-worker.service
+tests/
+  campaign_tests.rs
+  config_tests.rs
+  pty_tests.rs
+  test_smoke.py
+AGENTS.md
+Cargo.toml
+README.md
+repomix.md</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="prompts/default_task.md">1: Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively</file><file path="prompts/heartbeat.md">1: [Supervisor Heartbeat - Iteration #{iteration}/{max_iterations}] Checkpoint recorded. Proceed with your systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.</file><file path="prompts/rate_limit.md">1: [Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.</file><file path="prompts/recovery.md">1: [Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.</file><file path="prompts/system_prompt.md"> 1: You are an autonomous senior software engineering worker.
+ 2: 
+ 3: Your objective is sustained, deep, iterative improvement of the repository. Do NOT stop after an initial superficial check or merely reporting that the repository builds.
+ 4: 
+ 5: WORKFLOW LOOP:
+ 6: Work through the codebase systematically using this continuous loop:
+ 7: 
+ 8: 1. DISCOVERY, PLAN &amp; TRIAGE:
+ 9:    - Inspect the codebase architecture, existing tests, and open issues/TODOs.
+10:    - At the beginning of the task, create a `PLAN.md` file in the repository root listing 5 to 20 concrete items to investigate, test, fix, or optimize.
+11:    - Look for genuine defects, unhandled exceptions, race conditions, schema migration edge cases, data serialization bugs, timezone discrepancies, or missing test coverage.
+12:    - Prioritize real domain logic and reliability over cosmetic tweaks.
+13: 
+14: 2. TEST-FIRST FIXES:
+15:    - For every defect or gap you identify:
+16:      a. Write a concrete test that reproduces the bug or asserts the missing behavior (red).
+17:      b. Implement the smallest robust fix in the codebase (green).
+18:      c. Verify that the new test passes and no regressions were introduced.
+19:      d. Commit the fix with a clear conventional commit message (e.g. `fix(domain): handle null in canonical rekey`).
+20:      e. Check off the completed item in `PLAN.md` (`- [x] ...`).
+21: 
+22: 3. SUSTAINED ITERATION:
+23:    - Do not stop after fixing the first issue.
+24:    - Continue to the next item in `PLAN.md`, unhandled edge case, or uncovered domain model.
+25:    - When you receive a supervisor heartbeat checkpoint prompt, review your progress, pick the next open item from `PLAN.md`, and proceed immediately.
+26:    - Keep working through problems until all identified issues are fixed, tested, and cleanly committed.
+27: 
+28: 4. RECORDING &amp; HYGIENE:
+29:    - Document any dead ends or failed approaches in `NOTES.md` so future iterations avoid them.
+30:    - Never push directly to main or master; keep all commits on your assigned branch.
+31:    - Ensure the repository remains in a clean, passing, and easily reviewable state.</file><file path="src/prompts.rs"> 1: use std::fs;
+ 2: use std::path::{Path, PathBuf};
+ 3: use crate::config::AppConfig;
+ 4: 
+ 5: pub struct PromptManager;
+ 6: 
+ 7: impl PromptManager {
+ 8:     pub fn get_prompts_dir(config: &amp;AppConfig) -&gt; PathBuf {
+ 9:         let candidate = PathBuf::from(&quot;/home/ubuntu/github-projects/codex-autonomous-worker/prompts&quot;);
+10:         if candidate.exists() {
+11:             return candidate;
+12:         }
+13:         let srv_candidate = config.base_dir.join(&quot;prompts&quot;);
+14:         if srv_candidate.exists() {
+15:             return srv_candidate;
+16:         }
+17:         PathBuf::from(&quot;prompts&quot;)
+18:     }
+19: 
+20:     pub fn load_prompt(config: &amp;AppConfig, filename: &amp;str, fallback: &amp;str) -&gt; String {
+21:         let dir = Self::get_prompts_dir(config);
+22:         let path = dir.join(filename);
+23:         if let Ok(content) = fs::read_to_string(&amp;path) {
+24:             let trimmed = content.trim();
+25:             if !trimmed.is_empty() {
+26:                 return trimmed.to_string();
+27:             }
+28:         }
+29:         if filename == &quot;system_prompt.md&quot; {
+30:             let legacy = Path::new(&quot;/home/ubuntu/codex-worker/task_prompt.md&quot;);
+31:             if let Ok(content) = fs::read_to_string(legacy) {
+32:                 let trimmed = content.trim();
+33:                 if !trimmed.is_empty() {
+34:                     return trimmed.to_string();
+35:                 }
+36:             }
+37:         }
+38:         fallback.to_string()
+39:     }
+40: 
+41:     pub fn system_prompt(config: &amp;AppConfig) -&gt; String {
+42:         Self::load_prompt(
+43:             config,
+44:             &quot;system_prompt.md&quot;,
+45:             include_str!(&quot;../prompts/task_prompt.md&quot;),
+46:         )
+47:     }
+48: 
+49:     pub fn heartbeat(config: &amp;AppConfig, iteration: u32, max_iterations: u32) -&gt; String {
+50:         let template = Self::load_prompt(
+51:             config,
+52:             &quot;heartbeat.md&quot;,
+53:             &quot;[Supervisor Heartbeat - Iteration #{iteration}/{max_iterations}] Checkpoint recorded. Proceed with your systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.&quot;,
+54:         );
+55:         template
+56:             .replace(&quot;{iteration}&quot;, &amp;iteration.to_string())
+57:             .replace(&quot;{max_iterations}&quot;, &amp;max_iterations.to_string())
+58:     }
+59: 
+60:     pub fn recovery(config: &amp;AppConfig) -&gt; String {
+61:         Self::load_prompt(
+62:             config,
+63:             &quot;recovery.md&quot;,
+64:             &quot;[Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.&quot;,
+65:         )
+66:     }
+67: 
+68:     pub fn rate_limit_cooldown(config: &amp;AppConfig) -&gt; String {
+69:         Self::load_prompt(
+70:             config,
+71:             &quot;rate_limit.md&quot;,
+72:             &quot;[Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.&quot;,
+73:         )
+74:     }
+75: 
+76:     pub fn default_task(config: &amp;AppConfig) -&gt; String {
+77:         Self::load_prompt(
+78:             config,
+79:             &quot;default_task.md&quot;,
+80:             &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;,
+81:         )
+82:     }
+83: }</file><file path="repomix.md">  1: # Repomix Codebase Snapshots Guide
+  2: 
+  3: This document explains how Repomix codebase snapshots are configured, generated, and used in this repository.
+  4: 
+  5: Repomix packages the repository source code, directory tree, and configuration files into structured, token-counted single-file bundles. These files are optimized for attaching or pasting directly into Web LLM chat interfaces (such as Claude.ai, ChatGPT, Gemini Advanced, and DeepSeek Chat) for research, architectural analysis, and deep debugging sessions.
+  6: 
+  7: ---
+  8: 
+  9: ## Snapshot Artifacts in `repomix/`
+ 10: 
+ 11: The repository automatically maintains two distinct snapshots inside the `repomix/` directory:
+ 12: 
+ 13: | Snapshot File | Approximate Size | Token Count | Primary Use Case |
+ 14: |---|---|---|---|
+ 15: | `repomix/repomix-src.xml` | ~140 KB | ~30,000 tokens | **Recommended for Web LLM Chat**: Contains all Rust engine code (`src/`), prompts layer (`prompts/`), manifest (`Cargo.toml`), and documentation. Leaves over 80% of context window open for reasoning. |
+ 16: | `repomix/repomix-full.xml` | ~200 KB | ~48,000 tokens | **Full Repository Snapshot**: Includes tests, systemd definitions, CLI scripts, and root metadata. Ideal for frontier models with large context windows (128K+). |
+ 17: 
+ 18: Both files use the **XML** format (`&lt;file path=&quot;...&quot;&gt;...&lt;/file&gt;`), which frontier LLM benchmark evaluations show provides the highest boundary clarity and fewest parsing hallucinations compared to raw markdown code fences.
+ 19: 
+ 20: ---
+ 21: 
+ 22: ## Using Snapshots in Web LLM Chat
+ 23: 
+ 24: 1. **Download or copy** either `repomix/repomix-src.xml` or `repomix/repomix-full.xml`.
+ 25: 2. **Attach or paste** the file directly into your conversation with Claude, ChatGPT, Gemini, or DeepSeek.
+ 26: 3. **Prompt the LLM** with your specific inquiry, for example:
+ 27:    - *&quot;Analyze the PTY event loop in `src/tui/` and suggest improvements for reducing rendering latency over SSH.&quot;*
+ 28:    - *&quot;Audit `src/supervisor.rs` for race conditions in parallel task worktree management.&quot;*
+ 29:    - *&quot;Help me add a new agent engine alongside Codex and OpenCode.&quot;*
+ 30: 
+ 31: Because the snapshot includes exact file paths, line numbers, and tree structure, the web LLM will reference exact file paths and lines without hallucinating missing modules.
+ 32: 
+ 33: ---
+ 34: 
+ 35: ## Generating Snapshots Locally
+ 36: 
+ 37: You do not need to install anything globally. You can run Repomix on demand using `npx`:
+ 38: 
+ 39: ### 1. Default Full Snapshot (Uses `repomix.config.json`)
+ 40: ```bash
+ 41: npx --yes repomix
+ 42: ```
+ 43: Generates `repomix/repomix-full.xml` respecting the ignore patterns defined in `repomix.config.json`.
+ 44: 
+ 45: ### 2. Compact Source &amp; Prompts Snapshot (Fastest &amp; Smallest)
+ 46: ```bash
+ 47: npx --yes repomix \
+ 48:   --style xml \
+ 49:   --output repomix/repomix-src.xml \
+ 50:   --include &quot;src/**,prompts/**,Cargo.toml,README.md,AGENTS.md,repomix.md&quot;
+ 51: ```
+ 52: 
+ 53: ### 3. Subsystem-Specific Debug Bundles
+ 54: To package only a specific subsystem (for ultra-fast debug turns with minimal tokens):
+ 55: 
+ 56: **TUI Subsystem Only (~12,000 tokens):**
+ 57: ```bash
+ 58: npx --yes repomix \
+ 59:   --style xml \
+ 60:   --output repomix/repomix-tui.xml \
+ 61:   --include &quot;src/tui/**,src/models.rs,Cargo.toml&quot;
+ 62: ```
+ 63: 
+ 64: **Supervisor Daemon &amp; Engine Only (~15,000 tokens):**
+ 65: ```bash
+ 66: npx --yes repomix \
+ 67:   --style xml \
+ 68:   --output repomix/repomix-daemon.xml \
+ 69:   --include &quot;src/supervisor.rs,src/campaign.rs,src/config.rs,prompts/**,Cargo.toml&quot;
+ 70: ```
+ 71: 
+ 72: ### 4. Markdown Style (Alternative Format)
+ 73: If you prefer standard Markdown headers (`# File: src/...`) instead of XML tags:
+ 74: ```bash
+ 75: npx --yes repomix \
+ 76:   --style markdown \
+ 77:   --output repomix/repomix-src.md \
+ 78:   --include &quot;src/**,prompts/**,Cargo.toml&quot;
+ 79: ```
+ 80: 
+ 81: ---
+ 82: 
+ 83: ## Token Budgeting Cheat Sheet
+ 84: 
+ 85: | Target LLM Model | Context Window | `repomix-src.xml` Consumption | Headroom Remaining |
+ 86: |---|---|---|---|
+ 87: | **Claude 3.5 Sonnet / Opus** | 200,000 tokens | ~15% | ~170,000 tokens |
+ 88: | **GPT-4o / GPT-4.5** | 128,000 tokens | ~24% | ~97,000 tokens |
+ 89: | **Gemini 1.5 Pro / 2.0 Flash** | 1,000,000+ tokens | ~3% | ~970,000 tokens |
+ 90: | **DeepSeek V3 / R1 (Web)** | 64,000 tokens | ~48% | ~33,000 tokens |
+ 91: 
+ 92: ---
+ 93: 
+ 94: ## Continuous Integration (GitHub Actions)
+ 95: 
+ 96: The repository includes an automated CI workflow at `.github/workflows/repomix.yml`: 
+ 97: - **On Pull Requests**: Runs Repomix, validates that no secrets or oversized build artifacts leak into the snapshot, and uploads the bundles as build artifacts.
+ 98: - **On Push to `main`**: Automatically rebuilds both `repomix/repomix-full.xml` and `repomix/repomix-src.xml` and commits them back to the repository with `[skip ci]`.
+ 99: 
+100: This guarantees that the snapshot files in `repomix/` always reflect the latest commit on `main`.</file><file path="systemd/cliproxyapi.service"> 1: [Unit]
+ 2: Description=CLIProxyAPI Gateway Service
+ 3: After=network-online.target
+ 4: Wants=network-online.target
+ 5: 
+ 6: [Service]
+ 7: Type=simple
+ 8: User=ubuntu
+ 9: Group=ubuntu
+10: WorkingDirectory=/home/ubuntu/CLIProxyAPI
+11: 
+12: ExecStart=/home/ubuntu/CLIProxyAPI/cli-proxy-api -config /home/ubuntu/CLIProxyAPI/config.yaml
+13: 
+14: Restart=always
+15: RestartSec=15
+16: TimeoutStopSec=30
+17: 
+18: Environment=HOME=/home/ubuntu
+19: Environment=PATH=/usr/local/bin:/usr/bin:/bin
+20: 
+21: StandardOutput=append:/home/ubuntu/CLIProxyAPI/logs/service.log
+22: StandardError=append:/home/ubuntu/CLIProxyAPI/logs/service.err
+23: 
+24: [Install]
+25: WantedBy=multi-user.target</file><file path="tests/config_tests.rs"> 1: use autopilot::config::AppConfig;
+ 2: use std::path::PathBuf;
+ 3: 
+ 4: #[test]
+ 5: fn test_default_config() {
+ 6:     let config = AppConfig::default();
+ 7:     assert_eq!(config.base_dir, PathBuf::from(&quot;/home/ubuntu/srv-codex&quot;));
+ 8:     assert_eq!(config.tasks_dir(), PathBuf::from(&quot;/home/ubuntu/srv-codex/tasks&quot;));
+ 9:     assert_eq!(config.worktrees_dir(), PathBuf::from(&quot;/home/ubuntu/srv-codex/worktrees&quot;));
+10:     assert_eq!(config.current_file(), PathBuf::from(&quot;/home/ubuntu/srv-codex/state/current.json&quot;));
+11:     assert_eq!(config.task_timeout_seconds, 7200);
+12:     assert_eq!(config.idle_timeout_seconds, 30);
+13: }
+14: 
+15: #[test]
+16: fn test_config_json_roundtrip() {
+17:     let config = AppConfig::default();
+18:     let json_str = serde_json::to_string(&amp;config).expect(&quot;Serialize to JSON&quot;);
+19:     let deserialized: AppConfig = serde_json::from_str(&amp;json_str).expect(&quot;Deserialize from JSON&quot;);
+20:     assert_eq!(config.base_dir, deserialized.base_dir);
+21:     assert_eq!(config.default_model, deserialized.default_model);
+22: }</file><file path="tests/pty_tests.rs"> 1: use autopilot::tui::pty::PtySession;
+ 2: 
+ 3: #[test]
+ 4: fn test_pty_session_initial_state() {
+ 5:     let session = PtySession::new(24, 80);
+ 6:     assert_eq!(session.current_rows, 24);
+ 7:     assert_eq!(session.current_cols, 80);
+ 8:     assert!(session.active_task_id.is_none());
+ 9: }
+10: 
+11: #[test]
+12: fn test_pty_resize_deduplication() {
+13:     let mut session = PtySession::new(24, 80);
+14:     // Identical resize should be a no-op
+15:     session.resize(24, 80);
+16:     assert_eq!(session.current_rows, 24);
+17:     assert_eq!(session.current_cols, 80);
+18: 
+19:     // Changed dimensions should update
+20:     session.resize(30, 100);
+21:     assert_eq!(session.current_rows, 30);
+22:     assert_eq!(session.current_cols, 100);
+23: }</file><file path="tests/test_smoke.py"> 1: import unittest
+ 2: import subprocess
+ 3: import sys
+ 4: from pathlib import Path
+ 5: from unittest.mock import patch, MagicMock
+ 6: from importlib.machinery import SourceFileLoader
+ 7: 
+ 8: class TestAutopilotSmoke(unittest.TestCase):
+ 9:     def setUp(self):
+10:         self.root = Path(__file__).resolve().parent.parent
+11: 
+12:     def test_autopilot_cli_commands(self):
+13:         commands = [
+14:             [&quot;bin/autopilot&quot;, &quot;--help&quot;],
+15:             [&quot;bin/autopilot&quot;, &quot;list&quot;],
+16:             [&quot;bin/autopilot&quot;, &quot;current&quot;],
+17:             [&quot;bin/autopilot&quot;, &quot;history&quot;],
+18:             [&quot;bin/task&quot;, &quot;--help&quot;],
+19:             [&quot;bin/task&quot;, &quot;list&quot;]
+20:         ]
+21:         for cmd in commands:
+22:             res = subprocess.run([sys.executable, str(self.root / cmd[0])] + cmd[1:], capture_output=True, text=True)
+23:             self.assertEqual(res.returncode, 0, f&quot;Command {&apos; &apos;.join(cmd)} failed with error:\n{res.stderr}&quot;)
+24: 
+25:     def test_cmd_tui_initialization_path(self):
+26:         loader = SourceFileLoader(&quot;autopilot&quot;, str(self.root / &quot;bin&quot; / &quot;autopilot&quot;))
+27:         autopilot = loader.load_module()
+28: 
+29:         with patch(&quot;subprocess.run&quot;) as mock_run:
+30:             def mock_subp(cmd, **kwargs):
+31:                 ret = MagicMock()
+32:                 if &quot;has-session&quot; in cmd:
+33:                     ret.returncode = 1
+34:                 else:
+35:                     ret.returncode = 0
+36:                 return ret
+37: 
+38:             mock_run.side_effect = mock_subp
+39:             # This must execute without NameError, SyntaxError or any unhandled exceptions
+40:             autopilot.cmd_tui()
+41:             self.assertTrue(mock_run.called)
+42: 
+43:     def test_sidebar_logic_functions(self):
+44:         sys.path.insert(0, str(self.root / &quot;bin&quot;))
+45:         import sidebar
+46:         tasks, current_data = sidebar.get_tasks()
+47:         self.assertIsInstance(tasks, list)
+48:         self.assertIsInstance(current_data, dict)
+49:         duration_str = sidebar.format_duration(125)
+50:         self.assertEqual(duration_str, &quot;2m&quot;)
+51: 
+52:     def test_worker_imports_and_find_task(self):
+53:         sys.path.insert(0, str(self.root))
+54:         import worker
+55:         path, data = worker.find_next_task()
+56:         self.assertTrue(path is None or isinstance(path, Path))
+57: 
+58: if __name__ == &quot;__main__&quot;:
+59:     unittest.main()</file><file path="prompts/task_prompt.md"> 1: You are an autonomous senior software engineering worker.
+ 2: 
+ 3: Your objective is sustained, deep, iterative improvement of the repository. Do NOT stop after an initial superficial check or merely reporting that the repository builds.
+ 4: 
+ 5: WORKFLOW LOOP:
+ 6: Work through the codebase systematically using this continuous loop:
+ 7: 
+ 8: 1. DISCOVERY, PLAN &amp; TRIAGE:
+ 9:    - Inspect the codebase architecture, existing tests, and open issues/TODOs.
+10:    - At the beginning of the task, create a `PLAN.md` file in the repository root listing 5 to 20 concrete items to investigate, test, fix, or optimize.
+11:    - Look for genuine defects, unhandled exceptions, race conditions, schema migration edge cases, data serialization bugs, timezone discrepancies, or missing test coverage.
+12:    - Prioritize real domain logic and reliability over cosmetic tweaks.
+13: 
+14: 2. TEST-FIRST FIXES:
+15:    - For every defect or gap you identify:
+16:      a. Write a concrete test that reproduces the bug or asserts the missing behavior (red).
+17:      b. Implement the smallest robust fix in the codebase (green).
+18:      c. Verify that the new test passes and no regressions were introduced.
+19:      d. Commit the fix with a clear conventional commit message (e.g. `fix(domain): handle null in canonical rekey`).
+20:      e. Check off the completed item in `PLAN.md` (`- [x] ...`).
+21: 
+22: 3. SUSTAINED ITERATION:
+23:    - Do not stop after fixing the first issue.
+24:    - Continue to the next item in `PLAN.md`, unhandled edge case, or uncovered domain model.
+25:    - When you receive a supervisor heartbeat checkpoint prompt, review your progress, pick the next open item from `PLAN.md`, and proceed immediately.
+26:    - Keep working through problems until all identified issues are fixed, tested, and cleanly committed.
+27: 
+28: 4. RECORDING &amp; HYGIENE:
+29:    - Document any dead ends or failed approaches in `NOTES.md` so future iterations avoid them.
+30:    - Never push directly to main or master; keep all commits on your assigned branch.
+31:    - Ensure the repository remains in a clean, passing, and easily reviewable state.</file><file path="src/cli.rs"> 1: use clap::{Parser, Subcommand};
+ 2: 
+ 3: #[derive(Parser, Debug)]
+ 4: #[command(name = &quot;autopilot&quot;)]
+ 5: #[command(author = &quot;Autopilot Contributors&quot;)]
+ 6: #[command(version = &quot;0.4.6&quot;)]
+ 7: #[command(about = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;, long_about = None)]
+ 8: pub struct Cli {
+ 9:     #[command(subcommand)]
+10:     pub command: Option&lt;Commands&gt;,
+11: }
+12: 
+13: #[derive(Subcommand, Debug)]
+14: pub enum Commands {
+15:     /// Launch the split-screen TUI control deck
+16:     Tui,
+17: 
+18:     /// Launch a 24/7 autonomous continuous loop and open the control deck
+19:     Loop {
+20:         /// Campaign objective
+21:         #[arg(default_value = &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;)]
+22:         prompt: Vec&lt;String&gt;,
+23: 
+24:         /// Target repository name
+25:         #[arg(short, long, default_value = &quot;chess-repertoire-srs&quot;)]
+26:         repo: String,
+27: 
+28:         /// Agent engine (codex or opencode)
+29:         #[arg(short, long, default_value = &quot;codex&quot;)]
+30:         agent: String,
+31: 
+32:         /// Model override
+33:         #[arg(short, long)]
+34:         model: Option&lt;String&gt;,
+35: 
+36:         /// Iterations budget
+37:         #[arg(long, default_value_t = 30)]
+38:         iterations: u32,
+39:     },
+40: 
+41:     /// Queue a new autonomous engineering task
+42:     #[command(alias = &quot;task&quot;)]
+43:     Queue {
+44:         /// Campaign objective
+45:         prompt: Vec&lt;String&gt;,
+46: 
+47:         /// Target repository name
+48:         #[arg(short, long)]
+49:         repo: Option&lt;String&gt;,
+50: 
+51:         /// Agent engine (codex or opencode)
+52:         #[arg(short, long, default_value = &quot;codex&quot;)]
+53:         agent: String,
+54: 
+55:         /// Model override
+56:         #[arg(short, long)]
+57:         model: Option&lt;String&gt;,
+58: 
+59:         /// Iteration budget for continuous loop
+60:         #[arg(long, default_value_t = 20)]
+61:         iterations: u32,
+62:     },
+63: 
+64:     /// List active, queued, and completed tasks
+65:     List,
+66: 
+67:     /// Show currently running tasks details
+68:     Current,
+69: 
+70:     /// Show completed tasks history
+71:     History {
+72:         #[arg(short = &apos;n&apos;, long, default_value_t = 10)]
+73:         count: usize,
+74:     },
+75: 
+76:     /// View or follow logs
+77:     Logs {
+78:         #[arg(short, long)]
+79:         follow: bool,
+80: 
+81:         #[arg(short, long, default_value_t = 30)]
+82:         lines: usize,
+83: 
+84:         #[arg(long)]
+85:         last: bool,
+86:     },
+87: 
+88:     /// Run the 24/7 background supervisor daemon (used by systemd)
+89:     Daemon,
+90: }</file><file path="src/lib.rs">1: pub mod config;
+2: pub mod campaign;
+3: pub mod supervisor;
+4: pub mod tui;
+5: pub mod cli;
+6: pub mod models;
+7: pub mod prompts;</file><file path="src/models.rs">  1: use std::path::Path;
+  2: 
+  3: #[derive(Debug, Clone)]
+  4: pub struct ModelInfo {
+  5:     pub id: String,
+  6:     pub display_name: String,
+  7: }
+  8: 
+  9: pub fn get_codex_models() -&gt; Vec&lt;ModelInfo&gt; {
+ 10:     let catalog_path = Path::new(&quot;/home/ubuntu/.codex/model-catalogs/gateway.json&quot;);
+ 11:     if let Ok(content) = std::fs::read_to_string(catalog_path) {
+ 12:         if let Ok(v) = serde_json::from_str::&lt;serde_json::Value&gt;(&amp;content) {
+ 13:             if let Some(models) = v.get(&quot;models&quot;).and_then(|m| m.as_array()) {
+ 14:                 let mut list = Vec::new();
+ 15:                 for m in models {
+ 16:                     if let Some(slug) = m.get(&quot;slug&quot;).and_then(|s| s.as_str()) {
+ 17:                         let name = m.get(&quot;display_name&quot;).and_then(|d| d.as_str()).unwrap_or(slug);
+ 18:                         let desc = if slug.contains(&quot;flash&quot;) {
+ 19:                             format!(&quot;{} ({}) [Fast]&quot;, name, slug)
+ 20:                         } else if slug.contains(&quot;free&quot;) {
+ 21:                             format!(&quot;{} ({}) [Free]&quot;, name, slug)
+ 22:                         } else if slug.contains(&quot;opus&quot;) || slug.contains(&quot;astra&quot;) {
+ 23:                             format!(&quot;{} ({}) [Frontier Reasoning]&quot;, name, slug)
+ 24:                         } else {
+ 25:                             format!(&quot;{} ({})&quot;, name, slug)
+ 26:                         };
+ 27:                         list.push(ModelInfo {
+ 28:                             id: slug.to_string(),
+ 29:                             display_name: desc,
+ 30:                         });
+ 31:                     }
+ 32:                 }
+ 33:                 if !list.is_empty() {
+ 34:                     return list;
+ 35:                 }
+ 36:             }
+ 37:         }
+ 38:     }
+ 39: 
+ 40:     vec![
+ 41:         ModelInfo {
+ 42:             id: &quot;antigravity/gemini-3.8-flash-high&quot;.to_string(),
+ 43:             display_name: &quot;Gemini 3.8 Flash High (antigravity/gemini-3.8-flash-high) [Fast, 1M Context]&quot;.to_string(),
+ 44:         },
+ 45:         ModelInfo {
+ 46:             id: &quot;agentrouter/deepseek-v4-flash&quot;.to_string(),
+ 47:             display_name: &quot;DeepSeek V4 Flash (agentrouter/deepseek-v4-flash) [Fast Code]&quot;.to_string(),
+ 48:         },
+ 49:         ModelInfo {
+ 50:             id: &quot;gemini-3.5-flash-lite&quot;.to_string(),
+ 51:             display_name: &quot;Gemini 3.5 Flash Lite (gemini-3.5-flash-lite) [Ultra Fast]&quot;.to_string(),
+ 52:         },
+ 53:     ]
+ 54: }
+ 55: 
+ 56: pub fn get_opencode_models() -&gt; Vec&lt;ModelInfo&gt; {
+ 57:     if let Ok(out) = std::process::Command::new(&quot;opencode&quot;).arg(&quot;models&quot;).output() {
+ 58:         if out.status.success() {
+ 59:             let text = String::from_utf8_lossy(&amp;out.stdout);
+ 60:             let mut list = Vec::new();
+ 61:             for line in text.lines() {
+ 62:                 let trimmed = line.trim();
+ 63:                 // Filter out offline bifrost models and empty lines
+ 64:                 if !trimmed.is_empty() &amp;&amp; !trimmed.contains(&apos; &apos;) &amp;&amp; !trimmed.starts_with(&quot;bifrost/&quot;) {
+ 65:                     let desc = if trimmed.starts_with(&quot;opencode/&quot;) {
+ 66:                         let short = trimmed.strip_prefix(&quot;opencode/&quot;).unwrap_or(trimmed);
+ 67:                         format!(&quot;{} ({}) [Built-in Free]&quot;, short, trimmed)
+ 68:                     } else if trimmed.starts_with(&quot;cliproxy/&quot;) {
+ 69:                         let short = trimmed.strip_prefix(&quot;cliproxy/&quot;).unwrap_or(trimmed);
+ 70:                         if short.contains(&quot;flash&quot;) {
+ 71:                             format!(&quot;{} ({}) [Fast / CLIProxy]&quot;, short, trimmed)
+ 72:                         } else if short.contains(&quot;free&quot;) {
+ 73:                             format!(&quot;{} ({}) [Free / CLIProxy]&quot;, short, trimmed)
+ 74:                         } else {
+ 75:                             format!(&quot;{} ({}) [CLIProxy]&quot;, short, trimmed)
+ 76:                         }
+ 77:                     } else {
+ 78:                         trimmed.to_string()
+ 79:                     };
+ 80:                     list.push(ModelInfo {
+ 81:                         id: trimmed.to_string(),
+ 82:                         display_name: desc,
+ 83:                     });
+ 84:                 }
+ 85:             }
+ 86:             if !list.is_empty() {
+ 87:                 return list;
+ 88:             }
+ 89:         }
+ 90:     }
+ 91: 
+ 92:     let config_path = dirs::home_dir().map(|h| h.join(&quot;.config/opencode/opencode.json&quot;));
+ 93:     if let Some(path) = config_path {
+ 94:         if let Ok(content) = std::fs::read_to_string(path) {
+ 95:             if let Ok(v) = serde_json::from_str::&lt;serde_json::Value&gt;(&amp;content) {
+ 96:                 if let Some(providers) = v.get(&quot;providers&quot;).and_then(|p| p.as_object()) {
+ 97:                     let mut list = Vec::new();
+ 98:                     for (prov_name, prov_val) in providers {
+ 99:                         if prov_name == &quot;bifrost&quot; {
+100:                             continue;
+101:                         }
+102:                         if let Some(models) = prov_val.get(&quot;models&quot;).and_then(|m| m.as_object()) {
+103:                             for (model_key, _) in models {
+104:                                 let full_id = format!(&quot;{}/{}&quot;, prov_name, model_key);
+105:                                 list.push(ModelInfo {
+106:                                     id: full_id.clone(),
+107:                                     display_name: full_id,
+108:                                 });
+109:                             }
+110:                         }
+111:                     }
+112:                     if !list.is_empty() {
+113:                         return list;
+114:                     }
+115:                 }
+116:             }
+117:         }
+118:     }
+119: 
+120:     vec![
+121:         ModelInfo {
+122:             id: &quot;cliproxy/antigravity/gemini-3.8-flash-high&quot;.to_string(),
+123:             display_name: &quot;Antigravity Gemini 3.8 Flash High [CLIProxy / Fast]&quot;.to_string(),
+124:         },
+125:         ModelInfo {
+126:             id: &quot;opencode/nemotron-3.5-lightning-free&quot;.to_string(),
+127:             display_name: &quot;Nemotron 3.5 Lightning Free [Built-in Free]&quot;.to_string(),
+128:         },
+129:     ]
+130: }</file><file path="systemd/codex-worker.service"> 1: [Unit]
+ 2: Description=24/7 Codex Autonomous Worker
+ 3: After=network-online.target cliproxyapi.service
+ 4: Wants=network-online.target
+ 5: 
+ 6: [Service]
+ 7: Type=simple
+ 8: User=ubuntu
+ 9: Group=ubuntu
+10: WorkingDirectory=/home/ubuntu/codex-worker
+11: 
+12: ExecStart=/home/ubuntu/.local/bin/autopilot daemon
+13: 
+14: Restart=always
+15: RestartSec=30
+16: TimeoutStopSec=30
+17: 
+18: Environment=HOME=/home/ubuntu
+19: Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+20: 
+21: StandardOutput=append:/home/ubuntu/srv-codex/logs/worker.log
+22: StandardError=append:/home/ubuntu/srv-codex/logs/worker.err
+23: 
+24: [Install]
+25: WantedBy=multi-user.target</file><file path="Cargo.toml"> 1: [package]
+ 2: name = &quot;autopilot&quot;
+ 3: version = &quot;0.4.0&quot;
+ 4: edition = &quot;2021&quot;
+ 5: authors = [&quot;Autopilot Contributors&quot;]
+ 6: description = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;
+ 7: 
+ 8: [dependencies]
+ 9: ratatui = &quot;0.29&quot;
+10: crossterm = &quot;0.28&quot;
+11: tokio = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+12: clap = { version = &quot;4&quot;, features = [&quot;derive&quot;] }
+13: serde = { version = &quot;1&quot;, features = [&quot;derive&quot;] }
+14: serde_json = &quot;1&quot;
+15: serde_yaml = &quot;0.9&quot;
+16: chrono = { version = &quot;0.4&quot;, features = [&quot;serde&quot;] }
+17: anyhow = &quot;1&quot;
+18: dirs = &quot;5&quot;
+19: portable-pty = &quot;0.8&quot;
+20: vt100 = &quot;0.15&quot;
+21: 
+22: [[bin]]
+23: name = &quot;autopilot&quot;
+24: path = &quot;src/main.rs&quot;
+25: 
+26: [dev-dependencies]
+27: tempfile = &quot;3&quot;</file><file path="src/tui/pty.rs">  1: use std::io::{Read, Write};
+  2: use std::path::Path;
+  3: use std::sync::{Arc, Mutex};
+  4: use anyhow::Result;
+  5: use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+  6: use ratatui::{
+  7:     layout::Rect,
+  8:     style::{Color, Modifier, Style},
+  9:     widgets::Clear,
+ 10:     Frame,
+ 11: };
+ 12: 
+ 13: pub struct PtySession {
+ 14:     pub parser: Arc&lt;Mutex&lt;vt100::Parser&gt;&gt;,
+ 15:     pub writer: Option&lt;Box&lt;dyn Write + Send&gt;&gt;,
+ 16:     pub child: Option&lt;Box&lt;dyn portable_pty::Child + Send + Sync&gt;&gt;,
+ 17:     pub master: Option&lt;Box&lt;dyn MasterPty + Send&gt;&gt;,
+ 18:     pub active_task_id: Option&lt;String&gt;,
+ 19:     pub current_rows: u16,
+ 20:     pub current_cols: u16,
+ 21: }
+ 22: 
+ 23: impl Default for PtySession {
+ 24:     fn default() -&gt; Self {
+ 25:         Self::new(24, 80)
+ 26:     }
+ 27: }
+ 28: 
+ 29: impl PtySession {
+ 30:     pub fn new(rows: u16, cols: u16) -&gt; Self {
+ 31:         Self {
+ 32:             parser: Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 500))),
+ 33:             writer: None,
+ 34:             child: None,
+ 35:             master: None,
+ 36:             active_task_id: None,
+ 37:             current_rows: rows,
+ 38:             current_cols: cols,
+ 39:         }
+ 40:     }
+ 41: 
+ 42:     pub fn spawn(
+ 43:         &amp;mut self,
+ 44:         task_id: String,
+ 45:         program: &amp;str,
+ 46:         args: &amp;[&amp;str],
+ 47:         cwd: &amp;Path,
+ 48:         rows: u16,
+ 49:         cols: u16,
+ 50:     ) -&gt; Result&lt;()&gt; {
+ 51:         self.kill();
+ 52: 
+ 53:         let target_rows = rows.max(10);
+ 54:         let target_cols = cols.max(20);
+ 55: 
+ 56:         let pty_system = native_pty_system();
+ 57:         let pair = pty_system.openpty(PtySize {
+ 58:             rows: target_rows,
+ 59:             cols: target_cols,
+ 60:             pixel_width: 0,
+ 61:             pixel_height: 0,
+ 62:         })?;
+ 63: 
+ 64:         let parser = Arc::new(Mutex::new(vt100::Parser::new(target_rows, target_cols, 500)));
+ 65:         let parser_clone = Arc::clone(&amp;parser);
+ 66: 
+ 67:         let mut reader = pair.master.try_clone_reader()?;
+ 68:         std::thread::spawn(move || {
+ 69:             let mut buf = [0u8; 16384];
+ 70:             while let Ok(n) = reader.read(&amp;mut buf) {
+ 71:                 if n == 0 {
+ 72:                     break;
+ 73:                 }
+ 74:                 if let Ok(mut p) = parser_clone.lock() {
+ 75:                     p.process(&amp;buf[..n]);
+ 76:                 }
+ 77:             }
+ 78:         });
+ 79: 
+ 80:         let mut cmd = CommandBuilder::new(program);
+ 81:         for arg in args {
+ 82:             cmd.arg(arg);
+ 83:         }
+ 84:         cmd.cwd(cwd);
+ 85:         // Explicit terminal capabilities
+ 86:         cmd.env(&quot;TERM&quot;, &quot;xterm-256color&quot;);
+ 87:         cmd.env(&quot;COLORTERM&quot;, &quot;truecolor&quot;);
+ 88:         cmd.env(&quot;LANG&quot;, &quot;en_US.UTF-8&quot;);
+ 89: 
+ 90:         let child = pair.slave.spawn_command(cmd)?;
+ 91:         let writer = pair.master.take_writer()?;
+ 92: 
+ 93:         self.parser = parser;
+ 94:         self.writer = Some(writer);
+ 95:         self.child = Some(child);
+ 96:         self.master = Some(pair.master);
+ 97:         self.active_task_id = Some(task_id);
+ 98:         self.current_rows = target_rows;
+ 99:         self.current_cols = target_cols;
+100: 
+101:         Ok(())
+102:     }
+103: 
+104:     pub fn write_input(&amp;mut self, bytes: &amp;[u8]) -&gt; Result&lt;()&gt; {
+105:         if let Some(ref mut w) = self.writer {
+106:             w.write_all(bytes)?;
+107:             w.flush()?;
+108:         }
+109:         Ok(())
+110:     }
+111: 
+112:     pub fn resize(&amp;mut self, rows: u16, cols: u16) {
+113:         if rows == 0 || cols == 0 {
+114:             return;
+115:         }
+116:         // Deduplicate resize calls to avoid SIGWINCH redraw storm
+117:         if rows == self.current_rows &amp;&amp; cols == self.current_cols {
+118:             return;
+119:         }
+120: 
+121:         self.current_rows = rows;
+122:         self.current_cols = cols;
+123: 
+124:         if let Some(ref mut m) = self.master {
+125:             let _ = m.resize(PtySize {
+126:                 rows,
+127:                 cols,
+128:                 pixel_width: 0,
+129:                 pixel_height: 0,
+130:             });
+131:         }
+132:         if let Ok(mut p) = self.parser.lock() {
+133:             p.set_size(rows, cols);
+134:         }
+135:     }
+136: 
+137:     pub fn is_running(&amp;mut self) -&gt; bool {
+138:         if let Some(ref mut child) = self.child {
+139:             match child.try_wait() {
+140:                 Ok(Some(_status)) =&gt; false,
+141:                 Ok(None) =&gt; true,
+142:                 Err(_) =&gt; false,
+143:             }
+144:         } else {
+145:             false
+146:         }
+147:     }
+148: 
+149:     pub fn kill(&amp;mut self) {
+150:         if let Some(ref mut child) = self.child {
+151:             let _ = child.kill();
+152:         }
+153:         self.child = None;
+154:         self.writer = None;
+155:         self.master = None;
+156:         self.active_task_id = None;
+157:         self.current_rows = 0;
+158:         self.current_cols = 0;
+159:         self.parser = Arc::new(Mutex::new(vt100::Parser::new(24, 80, 500)));
+160:     }
+161: 
+162:     pub fn render_screen(&amp;self, frame: &amp;mut Frame, area: Rect) {
+163:         if area.width == 0 || area.height == 0 {
+164:             return;
+165:         }
+166: 
+167:         // 1. Clear destination area so no characters from previous screens bleed through
+168:         frame.render_widget(Clear, area);
+169: 
+170:         if let Ok(parser) = self.parser.lock() {
+171:             let screen = parser.screen();
+172:             let screen_size = screen.size();
+173:             let max_r = (area.height as u16).min(screen_size.0);
+174:             let max_c = (area.width as u16).min(screen_size.1);
+175: 
+176:             for r in 0..max_r {
+177:                 for c in 0..max_c {
+178:                     let buf_cell = frame.buffer_mut().cell_mut((area.x + c, area.y + r)).unwrap();
+179:                     if let Some(cell) = screen.cell(r, c) {
+180:                         let contents = cell.contents();
+181:                         // CRITICAL: Blank cells must be explicit whitespace &quot; &quot;
+182:                         if contents.is_empty() {
+183:                             buf_cell.set_symbol(&quot; &quot;);
+184:                         } else {
+185:                             buf_cell.set_symbol(&amp;contents);
+186:                         }
+187: 
+188:                         let mut style = Style::default();
+189:                         if cell.bold() {
+190:                             style = style.add_modifier(Modifier::BOLD);
+191:                         }
+192:                         if cell.italic() {
+193:                             style = style.add_modifier(Modifier::ITALIC);
+194:                         }
+195:                         if cell.underline() {
+196:                             style = style.add_modifier(Modifier::UNDERLINED);
+197:                         }
+198:                         if cell.inverse() {
+199:                             style = style.add_modifier(Modifier::REVERSED);
+200:                         }
+201: 
+202:                         match cell.fgcolor() {
+203:                             vt100::Color::Default =&gt; {}
+204:                             vt100::Color::Idx(i) =&gt; style = style.fg(Color::Indexed(i)),
+205:                             vt100::Color::Rgb(red, green, blue) =&gt; {
+206:                                 style = style.fg(Color::Rgb(red, green, blue))
+207:                             }
+208:                         }
+209: 
+210:                         match cell.bgcolor() {
+211:                             vt100::Color::Default =&gt; {}
+212:                             vt100::Color::Idx(i) =&gt; style = style.bg(Color::Indexed(i)),
+213:                             vt100::Color::Rgb(red, green, blue) =&gt; {
+214:                                 style = style.bg(Color::Rgb(red, green, blue))
+215:                             }
+216:                         }
+217: 
+218:                         buf_cell.set_style(style);
+219:                     } else {
+220:                         buf_cell.set_symbol(&quot; &quot;);
+221:                         buf_cell.set_style(Style::default());
+222:                     }
+223:                 }
+224:             }
+225: 
+226:             // Synchronize terminal hardware cursor position if visible
+227:             if !screen.hide_cursor() {
+228:                 let (cursor_r, cursor_c) = screen.cursor_position();
+229:                 if cursor_r &lt; area.height &amp;&amp; cursor_c &lt; area.width {
+230:                     frame.set_cursor_position((area.x + cursor_c, area.y + cursor_r));
+231:                 }
+232:             }
+233:         }
+234:     }
+235: }</file><file path="src/config.rs">  1: use std::path::PathBuf;
+  2: use serde::{Deserialize, Serialize};
+  3: 
+  4: #[derive(Debug, Clone, Serialize, Deserialize)]
+  5: pub struct CliproxyConfig {
+  6:     #[serde(default = &quot;default_cliproxy_url&quot;)]
+  7:     pub url: String,
+  8:     #[serde(default = &quot;default_catalog_json&quot;)]
+  9:     pub catalog_json: String,
+ 10:     #[serde(default = &quot;default_true&quot;)]
+ 11:     pub check_health: bool,
+ 12: }
+ 13: 
+ 14: fn default_cliproxy_url() -&gt; String {
+ 15:     &quot;http://127.0.0.1:8317/v1&quot;.to_string()
+ 16: }
+ 17: fn default_catalog_json() -&gt; String {
+ 18:     &quot;/home/ubuntu/.codex/model-catalogs/gateway.json&quot;.to_string()
+ 19: }
+ 20: fn default_true() -&gt; bool {
+ 21:     true
+ 22: }
+ 23: 
+ 24: impl Default for CliproxyConfig {
+ 25:     fn default() -&gt; Self {
+ 26:         Self {
+ 27:             url: default_cliproxy_url(),
+ 28:             catalog_json: default_catalog_json(),
+ 29:             check_health: true,
+ 30:         }
+ 31:     }
+ 32: }
+ 33: 
+ 34: #[derive(Debug, Clone, Serialize, Deserialize)]
+ 35: pub struct AppConfig {
+ 36:     #[serde(default = &quot;default_base_dir&quot;)]
+ 37:     pub base_dir: PathBuf,
+ 38:     pub repos_dir: Option&lt;PathBuf&gt;,
+ 39:     pub worktrees_dir: Option&lt;PathBuf&gt;,
+ 40:     pub tasks_dir: Option&lt;PathBuf&gt;,
+ 41:     pub state_dir: Option&lt;PathBuf&gt;,
+ 42:     pub logs_dir: Option&lt;PathBuf&gt;,
+ 43:     #[serde(default = &quot;default_timeout&quot;)]
+ 44:     pub task_timeout_seconds: u64,
+ 45:     #[serde(default = &quot;default_idle_timeout&quot;)]
+ 46:     pub idle_timeout_seconds: u64,
+ 47:     #[serde(default = &quot;default_poll_interval&quot;)]
+ 48:     pub poll_interval_seconds: u64,
+ 49:     #[serde(default = &quot;default_backoff&quot;)]
+ 50:     pub rate_limit_backoff_seconds: u64,
+ 51:     #[serde(default = &quot;default_model&quot;)]
+ 52:     pub default_model: String,
+ 53:     #[serde(default = &quot;default_max_concurrent&quot;)]
+ 54:     pub max_concurrent_tasks: usize,
+ 55:     #[serde(default)]
+ 56:     pub cliproxy: CliproxyConfig,
+ 57: }
+ 58: 
+ 59: fn default_base_dir() -&gt; PathBuf {
+ 60:     PathBuf::from(&quot;/home/ubuntu/srv-codex&quot;)
+ 61: }
+ 62: fn default_timeout() -&gt; u64 {
+ 63:     7200
+ 64: }
+ 65: fn default_idle_timeout() -&gt; u64 {
+ 66:     30
+ 67: }
+ 68: fn default_poll_interval() -&gt; u64 {
+ 69:     15
+ 70: }
+ 71: fn default_backoff() -&gt; u64 {
+ 72:     300
+ 73: }
+ 74: fn default_model() -&gt; String {
+ 75:     &quot;antigravity/gemini-3.8-flash-high&quot;.to_string()
+ 76: }
+ 77: fn default_max_concurrent() -&gt; usize {
+ 78:     100
+ 79: }
+ 80: 
+ 81: impl Default for AppConfig {
+ 82:     fn default() -&gt; Self {
+ 83:         Self {
+ 84:             base_dir: default_base_dir(),
+ 85:             repos_dir: None,
+ 86:             worktrees_dir: None,
+ 87:             tasks_dir: None,
+ 88:             state_dir: None,
+ 89:             logs_dir: None,
+ 90:             task_timeout_seconds: default_timeout(),
+ 91:             idle_timeout_seconds: default_idle_timeout(),
+ 92:             poll_interval_seconds: default_poll_interval(),
+ 93:             rate_limit_backoff_seconds: default_backoff(),
+ 94:             default_model: default_model(),
+ 95:             max_concurrent_tasks: default_max_concurrent(),
+ 96:             cliproxy: CliproxyConfig::default(),
+ 97:         }
+ 98:     }
+ 99: }
+100: 
+101: impl AppConfig {
+102:     pub fn load() -&gt; Self {
+103:         let config_path = std::env::var(&quot;AUTOPILOT_CONFIG&quot;)
+104:             .map(PathBuf::from)
+105:             .unwrap_or_else(|_| PathBuf::from(&quot;/home/ubuntu/codex-worker/config.json&quot;));
+106: 
+107:         if config_path.exists() {
+108:             if let Ok(content) = std::fs::read_to_string(&amp;config_path) {
+109:                 if let Ok(cfg) = serde_json::from_str(&amp;content) {
+110:                     return cfg;
+111:                 }
+112:             }
+113:         }
+114:         Self::default()
+115:     }
+116: 
+117:     pub fn tasks_dir(&amp;self) -&gt; PathBuf {
+118:         self.tasks_dir.clone().unwrap_or_else(|| self.base_dir.join(&quot;tasks&quot;))
+119:     }
+120:     pub fn repos_dir(&amp;self) -&gt; PathBuf {
+121:         self.repos_dir.clone().unwrap_or_else(|| self.base_dir.join(&quot;repos&quot;))
+122:     }
+123:     pub fn worktrees_dir(&amp;self) -&gt; PathBuf {
+124:         self.worktrees_dir.clone().unwrap_or_else(|| self.base_dir.join(&quot;worktrees&quot;))
+125:     }
+126:     pub fn state_dir(&amp;self) -&gt; PathBuf {
+127:         self.state_dir.clone().unwrap_or_else(|| self.base_dir.join(&quot;state&quot;))
+128:     }
+129:     pub fn logs_dir(&amp;self) -&gt; PathBuf {
+130:         self.logs_dir.clone().unwrap_or_else(|| self.base_dir.join(&quot;logs&quot;))
+131:     }
+132:     pub fn current_file(&amp;self) -&gt; PathBuf {
+133:         self.state_dir().join(&quot;current.json&quot;)
+134:     }
+135:     pub fn history_file(&amp;self) -&gt; PathBuf {
+136:         self.state_dir().join(&quot;history.jsonl&quot;)
+137:     }
+138:     pub fn failures_file(&amp;self) -&gt; PathBuf {
+139:         self.state_dir().join(&quot;failures.jsonl&quot;)
+140:     }
+141: }</file><file path="tests/campaign_tests.rs"> 1: use autopilot::campaign::{format_duration_ago, CampaignStatus, queue_campaign, load_all_campaigns};
+ 2: use autopilot::config::AppConfig;
+ 3: use std::time::{Duration, SystemTime};
+ 4: 
+ 5: #[test]
+ 6: fn test_format_duration_ago() {
+ 7:     let now = SystemTime::now();
+ 8:     assert_eq!(format_duration_ago(now), &quot;0s ago&quot;);
+ 9: 
+10:     let five_mins_ago = now - Duration::from_secs(300);
+11:     assert_eq!(format_duration_ago(five_mins_ago), &quot;5m ago&quot;);
+12: 
+13:     let two_hours_ago = now - Duration::from_secs(7200 + 180);
+14:     assert_eq!(format_duration_ago(two_hours_ago), &quot;2h 03m ago&quot;);
+15: }
+16: 
+17: #[test]
+18: fn test_campaign_status_str() {
+19:     assert_eq!(CampaignStatus::Pending.as_str(), &quot;pending&quot;);
+20:     assert_eq!(CampaignStatus::Claimed.as_str(), &quot;claimed&quot;);
+21:     assert_eq!(CampaignStatus::Running.as_str(), &quot;running&quot;);
+22:     assert_eq!(CampaignStatus::Done.as_str(), &quot;done&quot;);
+23:     assert_eq!(CampaignStatus::Failed.as_str(), &quot;failed&quot;);
+24: }
+25: 
+26: #[test]
+27: fn test_queue_campaign_in_temp_dir() {
+28:     let temp_dir = tempfile::tempdir().unwrap();
+29:     let mut config = AppConfig::default();
+30:     config.base_dir = temp_dir.path().to_path_buf();
+31: 
+32:     let id = queue_campaign(&amp;config, &quot;test-repo&quot;, &quot;Test objective&quot;, &quot;continuous&quot;, 15, None, Some(&quot;codex&quot;)).expect(&quot;Queue campaign&quot;);
+33:     assert_eq!(id, &quot;001&quot;);
+34: 
+35:     let campaigns = load_all_campaigns(&amp;config);
+36:     assert_eq!(campaigns.len(), 1);
+37:     assert_eq!(campaigns[0].id, &quot;001&quot;);
+38:     assert_eq!(campaigns[0].repo, &quot;test-repo&quot;);
+39:     assert_eq!(campaigns[0].prompt, &quot;Test objective&quot;);
+40:     assert_eq!(campaigns[0].agent, &quot;codex&quot;);
+41:     assert_eq!(campaigns[0].status, CampaignStatus::Pending);
+42: 
+43:     // Queue another campaign with opencode
+44:     let id2 = queue_campaign(&amp;config, &quot;test-repo&quot;, &quot;Opencode test&quot;, &quot;single&quot;, 1, None, Some(&quot;opencode&quot;)).expect(&quot;Queue opencode campaign&quot;);
+45:     assert_eq!(id2, &quot;002&quot;);
+46: 
+47:     let campaigns2 = load_all_campaigns(&amp;config);
+48:     assert_eq!(campaigns2.len(), 2);
+49:     let opencode_c = campaigns2.iter().find(|c| c.id == &quot;002&quot;).unwrap();
+50:     assert_eq!(opencode_c.agent, &quot;opencode&quot;);
+51:     assert_eq!(opencode_c.mode, &quot;single&quot;);
+52: }</file><file path="README.md">  1: # Codex Autonomous Worker
+  2: 
+  3: An always-on, self-supervised autonomous engineering daemon that uses OpenAI Codex (`codex exec`) as a disposable worker process, supervised by `systemd`, backed by isolated Git worktrees, persistent journaling, and multi-tier rate limit mitigation.
+  4: 
+  5: ---
+  6: 
+  7: ## The Core Concept
+  8: 
+  9: Codex should not be responsible for staying alive 24/7. 
+ 10: 
+ 11: Instead of running a single fragile agent session that dies when SSH drops, hits context exhaustion, or halts on rate limits:
+ 12: - **`systemd`** supervises the worker daemon.
+ 13: - **The worker daemon** launches bounded, disposable `codex exec` tasks.
+ 14: - **Isolated Git worktrees** ensure your primary repository checkouts are never polluted.
+ 15: - **`CLIProxyAPI` + Worker Backoff** protects quota and automatically cools down exhausted accounts.
+ 16: - **Live Terminal Attachment**: Tasks run inside persistent `tmux` sessions so you can attach directly to the live agent TUI at any time with `task attach`.
+ 17: 
+ 18: ```text
+ 19: systemd
+ 20:  ├── cliproxyapi.service (:8317) ──&gt; rotates model keys, handles quotas/cooldowns
+ 21:  │
+ 22:  └── codex-worker.service
+ 23:        ├── scans ~/srv-codex/tasks/
+ 24:        ├── claims pending task (.claimed)
+ 25:        ├── creates isolated git worktree &amp; branch in ~/srv-codex/worktrees/
+ 26:        ├── runs bounded &apos;codex exec&apos; with safety and timeouts inside tmux (codex-live)
+ 27:        ├── tests, reviews, implements minimal fixes
+ 28:        ├── commits changes
+ 29:        ├── journals findings into history.jsonl
+ 30:        ├── handles 429/quota backoff gracefully without hammering
+ 31:        └── moves to next task
+ 32: ```
+ 33: 
+ 34: ---
+ 35: 
+ 36: ## Features
+ 37: 
+ 38: - **Continuous 24/7 Operation**: Survives SSH disconnects, terminal closures, reboots, and network resets.
+ 39: - **Branch &amp; Worktree Isolation**: Agents work strictly on disposable branches (`agent/task-...`) inside isolated worktrees. Main/master remains pristine.
+ 40: - **Live Observation (`task attach`)**: Watch the agent think, run tools, and execute commands in full color in real time. Detach anytime with `Ctrl-b d`.
+ 41: - **Session Resumption (`task resume`)**: Step into the interactive Codex TUI with the full session loaded after a run finishes.
+ 42: - **Mistake Memory**: Records failed attempts in `failures.jsonl` and injects past failure notes into subsequent task prompts so the agent never repeats dead ends.
+ 43: - **Two-Tier Rate Limit Resilience**:
+ 44:   1. *Proxy level*: Rotates across multiple accounts and providers with automatic cooldowns.
+ 45:   2. *Worker level*: Detects HTTP 429 or quota exhaustion, pauses for backoff (default 5m), re-queues the task, and resumes automatically.
+ 46: - **Zero Config Human CLI (`task`)**: Queue tasks in plain English, check queue status, view history, and inspect logs.
+ 47: 
+ 48: ---
+ 49: 
+ 50: ## Directory Architecture
+ 51: 
+ 52: ```text
+ 53: ~/codex-worker/
+ 54:  ├── worker.py                 # Core supervisor daemon
+ 55:  ├── config.json               # Daemon configuration
+ 56:  └── task_prompt.md            # Standard autonomous engineering instructions
+ 57: 
+ 58: ~/srv-codex/
+ 59:  ├── tasks/                    # Task queue (.yaml / .json files)
+ 60:  ├── repos/                    # Target repo pointers (symlinks or checkouts)
+ 61:  ├── worktrees/                # Ephemeral per-task workspaces
+ 62:  ├── state/                    # history.jsonl, failures.jsonl, current.json
+ 63:  └── logs/                     # worker.log and per-run codex_exec_*.log
+ 64: 
+ 65: ~/.local/bin/
+ 66:  └── task                      # CLI management tool
+ 67: ```
+ 68: 
+ 69: ---
+ 70: 
+ 71: ## Installation
+ 72: 
+ 73: ### Prerequisites
+ 74: 
+ 75: - Linux (Ubuntu 22.04+ or Debian recommended)
+ 76: - Python 3.10+ with `pyyaml` (`pip install pyyaml`)
+ 77: - `git`, `tmux`, `curl`, `jq`
+ 78: - [Codex CLI](https://github.com/openai/codex) installed
+ 79: - (Optional but recommended) [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) for free model pooling and failover
+ 80: 
+ 81: ### One-Command Setup
+ 82: 
+ 83: ```bash
+ 84: git clone https://github.com/mansourvery-hub/codex-autonomous-worker.git
+ 85: cd codex-autonomous-worker
+ 86: ./install.sh
+ 87: ```
+ 88: 
+ 89: The script creates the runtime directories, installs `task` into `~/.local/bin/`, configures systemd units, and starts the services.
+ 90: 
+ 91: ---
+ 92: 
+ 93: ## Usage
+ 94: 
+ 95: ### 1. The Autopilot Control Deck (TUI)
+ 96: 
+ 97: Launch the dedicated two-column terminal control surface:
+ 98: 
+ 99: ```bash
+100: # Launch the interactive split control deck over SSH:
+101: autopilot
+102: ```
+103: 
+104: - **Left Pane (~42% width)**: Shows 24/7 daemon status and rich campaign cards (status pill, runtime, objective, branch, iteration counter, and PLAN checklist progress).
+105: - **Right Pane (~58% width)**: Live interactive agent workspace. Press `Enter` on an active campaign to jump into the session and talk directly to Codex.
+106: - **Navigation**: Use `Up`/`Down` or `j`/`k` to browse. Press `Tab`, `F6`, `Alt-Left`, or click the sidebar with your mouse to return to the cards. Press `n` to queue a new campaign. Press `q` to detach.
+107: 
+108: ### 2. Queueing 24/7 Autonomous Campaigns
+109: 
+110: Queue long-running iterative campaigns from any directory:
+111: 
+112: ```bash
+113: # Queue a continuous multi-iteration engineering campaign (defaults to Codex):
+114: autopilot queue &quot;Audit timezone handling in review_history, add regression tests, and fix edge cases&quot;
+115: 
+116: # Run with OpenCode instead of Codex:
+117: autopilot queue &quot;Audit domain models and run verification&quot; --agent opencode
+118: 
+119: # Specify explicit repository, model, and iteration budget:
+120: autopilot queue &quot;Harden authentication flow and migrations&quot; -r my-app -m agentrouter/deepseek-v4-flash --iterations 25
+121: ```
+122: 
+123: ### 3. CLI Management
+124: 
+125: ```bash
+126: # Check active campaign details:
+127: autopilot current
+128: 
+129: # List pending and completed campaigns:
+130: autopilot list
+131: 
+132: # Inspect recent campaign history and notes:
+133: autopilot history
+134: 
+135: # Stream daemon logs:
+136: autopilot logs -f
+137: 
+138: # View full output from the latest agent execution:
+139: autopilot logs --last
+140: ```
+141: 
+142: ---
+143: 
+144: ## Manual Task Queueing
+145: 
+146: If you prefer configuration files over the CLI, drop a YAML file into `~/srv-codex/tasks/001-my-task.yaml`:
+147: 
+148: ```yaml
+149: id: &quot;001&quot;
+150: repo: chess-repertoire-srs
+151: type: bugfix
+152: priority: high
+153: status: pending
+154: prompt: |
+155:   Investigate intermittent authentication failure.
+156:   Reproduce with a unit test, implement minimal fix, and commit.
+157: ```
+158: 
+159: The daemon detects the file within 15 seconds, claims it, creates the isolated worktree, runs Codex, and moves the task to `.done`.
+160: 
+161: ---
+162: 
+163: ## Service Management
+164: 
+165: ```bash
+166: # Status
+167: sudo systemctl status codex-worker.service
+168: sudo systemctl status cliproxyapi.service
+169: 
+170: # Restart
+171: sudo systemctl restart codex-worker.service
+172: 
+173: # Logs via systemd journal
+174: journalctl -u codex-worker.service -f
+175: ```
+176: 
+177: ---
+178: 
+179: ## License
+180: 
+181: MIT</file><file path="src/campaign.rs">  1: use std::fs;
+  2: use std::path::{Path, PathBuf};
+  3: use std::time::SystemTime;
+  4: use anyhow::{Context, Result};
+  5: use chrono::Utc;
+  6: use serde::{Deserialize, Serialize};
+  7: use crate::config::AppConfig;
+  8: 
+  9: #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+ 10: #[serde(rename_all = &quot;lowercase&quot;)]
+ 11: pub enum CampaignStatus {
+ 12:     Pending,
+ 13:     Claimed,
+ 14:     Running,
+ 15:     Done,
+ 16:     Failed,
+ 17: }
+ 18: 
+ 19: impl CampaignStatus {
+ 20:     pub fn as_str(&amp;self) -&gt; &amp;&apos;static str {
+ 21:         match self {
+ 22:             CampaignStatus::Pending =&gt; &quot;pending&quot;,
+ 23:             CampaignStatus::Claimed =&gt; &quot;claimed&quot;,
+ 24:             CampaignStatus::Running =&gt; &quot;running&quot;,
+ 25:             CampaignStatus::Done =&gt; &quot;done&quot;,
+ 26:             CampaignStatus::Failed =&gt; &quot;failed&quot;,
+ 27:         }
+ 28:     }
+ 29: }
+ 30: 
+ 31: #[derive(Debug, Clone, Serialize, Deserialize)]
+ 32: pub struct CurrentExecution {
+ 33:     pub task_id: String,
+ 34:     pub repo: String,
+ 35:     pub branch: String,
+ 36:     pub started_at: String,
+ 37:     pub model: String,
+ 38:     pub status: String,
+ 39:     pub iteration: Option&lt;u32&gt;,
+ 40:     pub max_iterations: Option&lt;u32&gt;,
+ 41:     pub last_checkpoint: Option&lt;String&gt;,
+ 42: }
+ 43: 
+ 44: #[derive(Debug, Clone, Serialize, Deserialize)]
+ 45: pub struct Campaign {
+ 46:     pub id: String,
+ 47:     pub repo: String,
+ 48:     pub prompt: String,
+ 49:     pub status: CampaignStatus,
+ 50:     pub mode: String,
+ 51:     pub iteration: u32,
+ 52:     pub max_iterations: u32,
+ 53:     pub branch: String,
+ 54:     pub model: String,
+ 55:     pub agent: String,
+ 56:     pub age: String,
+ 57:     pub file_path: PathBuf,
+ 58: }
+ 59: 
+ 60: #[derive(Debug, Serialize, Deserialize)]
+ 61: struct RawTaskFile {
+ 62:     pub id: Option&lt;String&gt;,
+ 63:     pub repo: Option&lt;String&gt;,
+ 64:     pub prompt: Option&lt;String&gt;,
+ 65:     pub status: Option&lt;String&gt;,
+ 66:     pub mode: Option&lt;String&gt;,
+ 67:     pub iterations: Option&lt;u32&gt;,
+ 68:     pub model: Option&lt;String&gt;,
+ 69:     pub agent: Option&lt;String&gt;,
+ 70:     pub priority: Option&lt;String&gt;,
+ 71:     pub updated_at: Option&lt;String&gt;,
+ 72: }
+ 73: 
+ 74: pub fn format_duration_ago(mtime: SystemTime) -&gt; String {
+ 75:     let now = SystemTime::now();
+ 76:     let elapsed = now.duration_since(mtime).unwrap_or_default().as_secs();
+ 77:     if elapsed &lt; 60 {
+ 78:         format!(&quot;{}s ago&quot;, elapsed)
+ 79:     } else if elapsed &lt; 3600 {
+ 80:         format!(&quot;{}m ago&quot;, elapsed / 60)
+ 81:     } else {
+ 82:         format!(&quot;{}h {:02}m ago&quot;, elapsed / 3600, (elapsed % 3600) / 60)
+ 83:     }
+ 84: }
+ 85: 
+ 86: pub fn load_current(config: &amp;AppConfig) -&gt; Option&lt;CurrentExecution&gt; {
+ 87:     let current_path = config.current_file();
+ 88:     if current_path.exists() {
+ 89:         if let Ok(content) = fs::read_to_string(&amp;current_path) {
+ 90:             if let Ok(curr) = serde_json::from_str(&amp;content) {
+ 91:                 return Some(curr);
+ 92:             }
+ 93:         }
+ 94:     }
+ 95:     None
+ 96: }
+ 97: 
+ 98: pub fn load_all_campaigns(config: &amp;AppConfig) -&gt; Vec&lt;Campaign&gt; {
+ 99:     let tasks_dir = config.tasks_dir();
+100:     let mut campaigns = Vec::new();
+101:     let current = load_current(config);
+102: 
+103:     let mut active_sessions = std::collections::HashSet::new();
+104:     if let Ok(out) = std::process::Command::new(&quot;tmux&quot;).args([&quot;list-sessions&quot;, &quot;-F&quot;, &quot;#{session_name}&quot;]).output() {
+105:         if out.status.success() {
+106:             let s = String::from_utf8_lossy(&amp;out.stdout);
+107:             for line in s.lines() {
+108:                 let trimmed = line.trim();
+109:                 if !trimmed.is_empty() {
+110:                     active_sessions.insert(trimmed.to_string());
+111:                 }
+112:             }
+113:         }
+114:     }
+115: 
+116:     let entries = match fs::read_dir(&amp;tasks_dir) {
+117:         Ok(e) =&gt; e,
+118:         Err(_) =&gt; return campaigns,
+119:     };
+120: 
+121:     for entry in entries.flatten() {
+122:         let path = entry.path();
+123:         if !path.is_file() {
+124:             continue;
+125:         }
+126: 
+127:         let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+128:         if fname.starts_with(&apos;.&apos;) {
+129:             continue;
+130:         }
+131: 
+132:         let mtime = match entry.metadata().and_then(|m| m.modified()) {
+133:             Ok(t) =&gt; t,
+134:             Err(_) =&gt; continue,
+135:         };
+136: 
+137:         let mut status = CampaignStatus::Pending;
+138:         if fname.contains(&quot;.done.&quot;) || fname.ends_with(&quot;.done.yaml&quot;) || fname.ends_with(&quot;.done.json&quot;) {
+139:             status = CampaignStatus::Done;
+140:         } else if fname.contains(&quot;.failed.&quot;) || fname.ends_with(&quot;.failed.yaml&quot;) || fname.ends_with(&quot;.failed.json&quot;) {
+141:             status = CampaignStatus::Failed;
+142:         } else if fname.contains(&quot;.claimed.&quot;) || fname.ends_with(&quot;.claimed.yaml&quot;) || fname.ends_with(&quot;.claimed.json&quot;) {
+143:             status = CampaignStatus::Claimed;
+144:         }
+145: 
+146:         let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+147:         let task_id = stem.split(&apos;.&apos;).next().unwrap_or(&quot;&quot;).split(&apos;-&apos;).next().unwrap_or(&quot;&quot;).to_string();
+148: 
+149:         let task_session = format!(&quot;autopilot-{}&quot;, task_id);
+150:         let session_alive = active_sessions.contains(&amp;task_session) || (task_id == &quot;011&quot; &amp;&amp; active_sessions.contains(&quot;codex-live&quot;));
+151: 
+152:         if status == CampaignStatus::Claimed &amp;&amp; session_alive {
+153:             status = CampaignStatus::Running;
+154:         }
+155: 
+156:         let is_active = current.as_ref().map(|c| c.task_id == task_id).unwrap_or(false);
+157:         if is_active &amp;&amp; status == CampaignStatus::Claimed {
+158:             status = CampaignStatus::Running;
+159:         }
+160: 
+161:         let file_content = match fs::read_to_string(&amp;path) {
+162:             Ok(c) =&gt; c,
+163:             Err(_) =&gt; continue,
+164:         };
+165: 
+166:         let raw: RawTaskFile = if path.extension().map(|e| e == &quot;json&quot;).unwrap_or(false) {
+167:             serde_json::from_str(&amp;file_content).unwrap_or(RawTaskFile {
+168:                 id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
+169:             })
+170:         } else {
+171:             serde_yaml::from_str(&amp;file_content).unwrap_or(RawTaskFile {
+172:                 id: None, repo: None, prompt: None, status: None, mode: None, iterations: None, model: None, agent: None, priority: None, updated_at: None,
+173:             })
+174:         };
+175: 
+176:         let id = raw.id.unwrap_or_else(|| task_id.clone());
+177:         let repo = raw.repo.unwrap_or_else(|| &quot;unknown&quot;.to_string());
+178:         let prompt = raw.prompt.unwrap_or_else(|| stem.clone());
+179:         let mode = raw.mode.unwrap_or_else(|| &quot;continuous&quot;.to_string());
+180:         let max_iterations = raw.iterations.unwrap_or(20);
+181:         let model = raw.model.unwrap_or_else(|| config.default_model.clone());
+182:         let agent = raw.agent.unwrap_or_else(|| &quot;codex&quot;.to_string());
+183:         let branch = format!(&quot;agent/task-{}&quot;, id);
+184:         let age = format_duration_ago(mtime);
+185: 
+186:         let mut iteration = 1;
+187:         let task_state_file = config.state_dir().join(format!(&quot;task-{}.json&quot;, id));
+188:         if task_state_file.exists() {
+189:             if let Ok(c) = fs::read_to_string(&amp;task_state_file) {
+190:                 if let Ok(val) = serde_json::from_str::&lt;serde_json::Value&gt;(&amp;c) {
+191:                     if let Some(it) = val.get(&quot;iteration&quot;).and_then(|i| i.as_u64()) {
+192:                         iteration = it as u32;
+193:                     }
+194:                 }
+195:             }
+196:         } else if is_active {
+197:             iteration = current.as_ref().and_then(|c| c.iteration).unwrap_or(1);
+198:         } else if status == CampaignStatus::Done || status == CampaignStatus::Failed {
+199:             iteration = max_iterations;
+200:         }
+201: 
+202:         campaigns.push(Campaign {
+203:             id,
+204:             repo,
+205:             prompt,
+206:             status,
+207:             mode,
+208:             iteration,
+209:             max_iterations,
+210:             branch,
+211:             model,
+212:             agent,
+213:             age,
+214:             file_path: path,
+215:         });
+216:     }
+217: 
+218:     // Sort order: Running (0) -&gt; Claimed (1) -&gt; Pending (2) -&gt; Done (3) -&gt; Failed (4)
+219:     // Within the same status, sort descending by task ID (newest first)
+220:     campaigns.sort_by(|a, b| {
+221:         let order_a = match a.status {
+222:             CampaignStatus::Running =&gt; 0,
+223:             CampaignStatus::Claimed =&gt; 1,
+224:             CampaignStatus::Pending =&gt; 2,
+225:             CampaignStatus::Done =&gt; 3,
+226:             CampaignStatus::Failed =&gt; 4,
+227:         };
+228:         let order_b = match b.status {
+229:             CampaignStatus::Running =&gt; 0,
+230:             CampaignStatus::Claimed =&gt; 1,
+231:             CampaignStatus::Pending =&gt; 2,
+232:             CampaignStatus::Done =&gt; 3,
+233:             CampaignStatus::Failed =&gt; 4,
+234:         };
+235:         order_a.cmp(&amp;order_b).then_with(|| b.id.cmp(&amp;a.id))
+236:     });
+237: 
+238:     campaigns
+239: }
+240: 
+241: pub fn find_session_for_campaign(task_id: &amp;str) -&gt; Option&lt;String&gt; {
+242:     let sessions_dir = dirs::home_dir()?.join(&quot;.codex&quot;).join(&quot;sessions&quot;);
+243:     if !sessions_dir.exists() {
+244:         return None;
+245:     }
+246: 
+247:     let search_tag = format!(&quot;task-{}&quot;, task_id);
+248:     let mut files = Vec::new();
+249:     find_files_recursive(&amp;sessions_dir, &amp;mut files);
+250: 
+251:     // Sort newest first
+252:     files.sort_by(|a, b| {
+253:         let ma = fs::metadata(a).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+254:         let mb = fs::metadata(b).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+255:         mb.cmp(&amp;ma)
+256:     });
+257: 
+258:     for file in files {
+259:         if let Ok(content) = fs::read_to_string(&amp;file) {
+260:             if let Some(first_line) = content.lines().next() {
+261:                 if first_line.contains(&amp;search_tag) {
+262:                     if let Ok(v) = serde_json::from_str::&lt;serde_json::Value&gt;(first_line) {
+263:                         if let Some(session_id) = v.get(&quot;payload&quot;).and_then(|p| p.get(&quot;session_id&quot;)).and_then(|s| s.as_str()) {
+264:                             return Some(session_id.to_string());
+265:                         }
+266:                     }
+267:                 }
+268:             }
+269:         }
+270:     }
+271:     None
+272: }
+273: 
+274: fn find_files_recursive(dir: &amp;Path, acc: &amp;mut Vec&lt;PathBuf&gt;) {
+275:     if let Ok(entries) = fs::read_dir(dir) {
+276:         for entry in entries.flatten() {
+277:             let path = entry.path();
+278:             if path.is_dir() {
+279:                 find_files_recursive(&amp;path, acc);
+280:             } else if path.extension().map(|e| e == &quot;jsonl&quot;).unwrap_or(false) {
+281:                 acc.push(path);
+282:             }
+283:         }
+284:     }
+285: }
+286: 
+287: pub fn find_log_for_campaign(config: &amp;AppConfig, task_id: &amp;str) -&gt; Option&lt;PathBuf&gt; {
+288:     let hist_file = config.history_file();
+289:     if hist_file.exists() {
+290:         if let Ok(content) = fs::read_to_string(&amp;hist_file) {
+291:             for line in content.lines().rev() {
+292:                 if let Ok(v) = serde_json::from_str::&lt;serde_json::Value&gt;(line) {
+293:                     let tid = v.get(&quot;task&quot;).and_then(|t| t.as_str()).unwrap_or(&quot;&quot;);
+294:                     if tid == task_id {
+295:                         if let Some(log_path) = v.get(&quot;log_path&quot;).and_then(|l| l.as_str()) {
+296:                             let p = PathBuf::from(log_path);
+297:                             if p.exists() {
+298:                                 return Some(p);
+299:                             }
+300:                         }
+301:                     }
+302:                 }
+303:             }
+304:         }
+305:     }
+306: 
+307:     let logs_dir = config.logs_dir();
+308:     let mut logs: Vec&lt;PathBuf&gt; = fs::read_dir(&amp;logs_dir)
+309:         .ok()?
+310:         .flatten()
+311:         .map(|e| e.path())
+312:         .filter(|p| {
+313:             p.file_name()
+314:                 .map(|f| f.to_string_lossy().contains(task_id))
+315:                 .unwrap_or(false)
+316:         })
+317:         .collect();
+318: 
+319:     logs.sort_by(|a, b| {
+320:         let ma = fs::metadata(a).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+321:         let mb = fs::metadata(b).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+322:         mb.cmp(&amp;ma)
+323:     });
+324: 
+325:     logs.into_iter().next()
+326: }
+327: 
+328: pub fn cancel_campaign_by_id(config: &amp;AppConfig, task_id: &amp;str) -&gt; Result&lt;()&gt; {
+329:     let session_name = format!(&quot;autopilot-{}&quot;, task_id);
+330:     let _ = std::process::Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, &amp;session_name]).output();
+331:     let _ = std::process::Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, &quot;codex-live&quot;]).output();
+332: 
+333:     let claimed_file = config.tasks_dir().join(format!(&quot;{}-campaign.claimed.yaml&quot;, task_id));
+334:     if claimed_file.exists() {
+335:         let done_file = config.tasks_dir().join(format!(&quot;{}-campaign.stopped.done.yaml&quot;, task_id));
+336:         let _ = fs::rename(&amp;claimed_file, done_file);
+337:     }
+338: 
+339:     let state_file = config.state_dir().join(format!(&quot;task-{}.json&quot;, task_id));
+340:     let _ = fs::remove_file(state_file);
+341: 
+342:     let worktree_dir = config.worktrees_dir().join(format!(&quot;task-{}&quot;, task_id));
+343:     let _ = fs::remove_dir_all(&amp;worktree_dir);
+344: 
+345:     Ok(())
+346: }
+347: 
+348: pub fn cancel_running_campaign(config: &amp;AppConfig) -&gt; Result&lt;Option&lt;String&gt;&gt; {
+349:     let campaigns = load_all_campaigns(config);
+350:     if let Some(running) = campaigns.into_iter().find(|c| c.status == CampaignStatus::Running) {
+351:         cancel_campaign_by_id(config, &amp;running.id)?;
+352:         return Ok(Some(running.id));
+353:     }
+354:     Ok(None)
+355: }
+356: 
+357: pub fn queue_campaign(
+358:     config: &amp;AppConfig,
+359:     repo: &amp;str,
+360:     prompt: &amp;str,
+361:     mode: &amp;str,
+362:     iterations: u32,
+363:     model: Option&lt;&amp;str&gt;,
+364:     agent: Option&lt;&amp;str&gt;,
+365: ) -&gt; Result&lt;String&gt; {
+366:     let tasks_dir = config.tasks_dir();
+367:     fs::create_dir_all(&amp;tasks_dir)?;
+368: 
+369:     let mut existing_nums = Vec::new();
+370:     if let Ok(entries) = fs::read_dir(&amp;tasks_dir) {
+371:         for entry in entries.flatten() {
+372:             let fname = entry.file_name().to_string_lossy().to_string();
+373:             let num_str = fname.split(&apos;.&apos;).next().unwrap_or(&quot;&quot;).split(&apos;-&apos;).next().unwrap_or(&quot;&quot;);
+374:             if let Ok(n) = num_str.parse::&lt;u32&gt;() {
+375:                 existing_nums.push(n);
+376:             }
+377:         }
+378:     }
+379: 
+380:     let next_id = format!(&quot;{:03}&quot;, existing_nums.iter().max().unwrap_or(&amp;0) + 1);
+381:     let filename = format!(&quot;{}-campaign.yaml&quot;, next_id);
+382:     let file_path = tasks_dir.join(filename);
+383: 
+384:     let raw = RawTaskFile {
+385:         id: Some(next_id.clone()),
+386:         repo: Some(repo.to_string()),
+387:         prompt: Some(prompt.to_string()),
+388:         status: Some(&quot;pending&quot;.to_string()),
+389:         mode: Some(mode.to_string()),
+390:         iterations: Some(iterations),
+391:         model: Some(model.unwrap_or(&amp;config.default_model).to_string()),
+392:         agent: Some(agent.unwrap_or(&quot;codex&quot;).to_string()),
+393:         priority: Some(&quot;high&quot;.to_string()),
+394:         updated_at: Some(Utc::now().to_rfc3339()),
+395:     };
+396: 
+397:     let yaml_str = serde_yaml::to_string(&amp;raw).context(&quot;Failed to serialize campaign to YAML&quot;)?;
+398:     fs::write(&amp;file_path, yaml_str).context(&quot;Failed to write campaign file&quot;)?;
+399: 
+400:     Ok(next_id)
+401: }</file><file path="src/main.rs">  1: use std::process::Command;
+  2: use anyhow::Result;
+  3: use clap::Parser;
+  4: use autopilot::cli::{Cli, Commands};
+  5: use autopilot::config::AppConfig;
+  6: use autopilot::campaign::{load_all_campaigns, queue_campaign, CampaignStatus};
+  7: use autopilot::supervisor::Supervisor;
+  8: use autopilot::tui::run_tui;
+  9: 
+ 10: #[tokio::main]
+ 11: async fn main() -&gt; Result&lt;()&gt; {
+ 12:     let cli = Cli::parse();
+ 13:     let config = AppConfig::load();
+ 14: 
+ 15:     match cli.command {
+ 16:         None | Some(Commands::Tui) =&gt; {
+ 17:             run_tui(config)?;
+ 18:         }
+ 19:         Some(Commands::Loop { prompt, repo, agent, model, iterations }) =&gt; {
+ 20:             let prompt_text = prompt.join(&quot; &quot;).trim().to_string();
+ 21:             let id = queue_campaign(&amp;config, &amp;repo, &amp;prompt_text, &quot;continuous&quot;, iterations, model.as_deref(), Some(&amp;agent))?;
+ 22:             println!(&quot;[32m✔ Launched 24/7 Autonomous Campaign #{} for {}[0m&quot;, id, repo);
+ 23:             println!(&quot;  Objective: {}&quot;, prompt_text);
+ 24:             println!(&quot;  Budget:    {} iterations&quot;, iterations);
+ 25:             println!(&quot;Opening Autopilot Control Deck...
+ 26: &quot;);
+ 27:             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+ 28:             run_tui(config)?;
+ 29:         }
+ 30:         Some(Commands::Queue { prompt, repo, agent, model, iterations }) =&gt; {
+ 31:             let prompt_text = prompt.join(&quot; &quot;).trim().to_string();
+ 32:             if prompt_text.is_empty() {
+ 33:                 eprintln!(&quot;Error: Objective cannot be empty.&quot;);
+ 34:                 std::process::exit(1);
+ 35:             }
+ 36:             let repo_name = repo.unwrap_or_else(|| &quot;chess-repertoire-srs&quot;.to_string());
+ 37:             let id = queue_campaign(&amp;config, &amp;repo_name, &amp;prompt_text, &quot;continuous&quot;, iterations, model.as_deref(), Some(&amp;agent))?;
+ 38:             println!(&quot;[32m✔ Autonomous task #{} queued for {}:[0m&quot;, id, repo_name);
+ 39:             println!(&quot;  Objective: {}&quot;, prompt_text);
+ 40:             println!(&quot;  Budget:    {} iterations&quot;, iterations);
+ 41:             println!(&quot;
+ 42: Launch &apos;autopilot&apos; to open the control deck.&quot;);
+ 43:         }
+ 44:         Some(Commands::List) =&gt; {
+ 45:             println!(&quot;[1m=== Active &amp; Queued Autonomous Tasks ===[0m&quot;);
+ 46:             let campaigns = load_all_campaigns(&amp;config);
+ 47:             if campaigns.is_empty() {
+ 48:                 println!(&quot;  (Queue is empty)&quot;);
+ 49:             }
+ 50:             for c in campaigns {
+ 51:                 let (color, pill) = match c.status {
+ 52:                     CampaignStatus::Running =&gt; (&quot;[32m&quot;, &quot;[WORKING]&quot;),
+ 53:                     CampaignStatus::Claimed =&gt; (&quot;[33m&quot;, &quot;[CLAIMED]&quot;),
+ 54:                     CampaignStatus::Pending =&gt; (&quot;[36m&quot;, &quot;[QUEUED ]&quot;),
+ 55:                     CampaignStatus::Done =&gt; (&quot;[32m&quot;, &quot;[DONE   ]&quot;),
+ 56:                     CampaignStatus::Failed =&gt; (&quot;[31m&quot;, &quot;[ERROR  ]&quot;),
+ 57:                 };
+ 58:                 println!(&quot;  {}{}[0m #{} [{}] [{}] {} ({})&quot;, color, pill, c.id, c.agent, c.repo, c.prompt, c.age);
+ 59:             }
+ 60:         }
+ 61:         Some(Commands::Current) =&gt; {
+ 62:             let campaigns = load_all_campaigns(&amp;config);
+ 63:             let active: Vec&lt;_&gt; = campaigns
+ 64:                 .into_iter()
+ 65:                 .filter(|c| c.status == CampaignStatus::Running || c.status == CampaignStatus::Claimed)
+ 66:                 .collect();
+ 67: 
+ 68:             if !active.is_empty() {
+ 69:                 println!(&quot;[1;32mCurrently Active Parallel Tasks ({}):[0m&quot;, active.len());
+ 70:                 for c in &amp;active {
+ 71:                     let status_str = match c.status {
+ 72:                         CampaignStatus::Running =&gt; &quot;RUNNING&quot;,
+ 73:                         CampaignStatus::Claimed =&gt; &quot;STARTING&quot;,
+ 74:                         _ =&gt; &quot;ACTIVE&quot;,
+ 75:                     };
+ 76:                     println!(
+ 77:                         &quot;  #{} [{}] [{}] ({}) - Iteration #{}/{} - {}&quot;,
+ 78:                         c.id, c.agent, c.repo, status_str, c.iteration, c.max_iterations, c.prompt
+ 79:                     );
+ 80:                 }
+ 81:                 println!(&quot;
+ 82: Launch &apos;autopilot&apos; to enter the live control deck.&quot;);
+ 83:             } else {
+ 84:                 println!(&quot;No autonomous tasks currently executing.&quot;);
+ 85:             }
+ 86:         }
+ 87:         Some(Commands::History { count }) =&gt; {
+ 88:             let hist_file = config.history_file();
+ 89:             if hist_file.exists() {
+ 90:                 if let Ok(content) = std::fs::read_to_string(&amp;hist_file) {
+ 91:                     println!(&quot;[1m=== Recent Task History ===[0m&quot;);
+ 92:                     let lines: Vec&lt;&amp;str&gt; = content.lines().collect();
+ 93:                     for line in lines.into_iter().rev().take(count) {
+ 94:                         if let Ok(v) = serde_json::from_str::&lt;serde_json::Value&gt;(line) {
+ 95:                             let task = v.get(&quot;task&quot;).and_then(|t| t.as_str()).unwrap_or(&quot;?&quot;);
+ 96:                             let repo = v.get(&quot;repo&quot;).and_then(|r| r.as_str()).unwrap_or(&quot;?&quot;);
+ 97:                             let status = v.get(&quot;status&quot;).and_then(|s| s.as_str()).unwrap_or(&quot;?&quot;);
+ 98:                             let model = v.get(&quot;model&quot;).and_then(|m| m.as_str()).unwrap_or(&quot;?&quot;);
+ 99:                             let color = if status == &quot;completed&quot; { &quot;[32m&quot; } else { &quot;[31m&quot; };
+100:                             println!(&quot;  Campaign #{} [{}] -&gt; {}{}[0m ({})&quot;, task, repo, color, status, model);
+101:                         }
+102:                     }
+103:                 }
+104:             } else {
+105:                 println!(&quot;No history recorded yet.&quot;);
+106:             }
+107:         }
+108:         Some(Commands::Logs { follow, lines, last }) =&gt; {
+109:             let log_path = if last {
+110:                 let logs_dir = config.logs_dir();
+111:                 let mut entries: Vec&lt;_&gt; = std::fs::read_dir(&amp;logs_dir)
+112:                     .unwrap_or_else(|_| std::fs::read_dir(&quot;.&quot;).unwrap())
+113:                     .flatten()
+114:                     .map(|e| e.path())
+115:                     .filter(|p| p.file_name().map(|f| f.to_string_lossy().starts_with(&quot;codex_&quot;)).unwrap_or(false))
+116:                     .collect();
+117:                 entries.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+118:                 entries.pop()
+119:             } else {
+120:                 Some(config.logs_dir().join(&quot;worker.log&quot;))
+121:             };
+122: 
+123:             if let Some(target) = log_path {
+124:                 if target.exists() {
+125:                     let mut cmd = Command::new(&quot;tail&quot;);
+126:                     if follow {
+127:                         cmd.arg(&quot;-f&quot;);
+128:                     } else {
+129:                         cmd.arg(format!(&quot;-n{}&quot;, lines));
+130:                     }
+131:                     cmd.arg(&amp;target);
+132:                     let _ = cmd.status();
+133:                 } else {
+134:                     println!(&quot;Log file {:?} not found.&quot;, target);
+135:                 }
+136:             } else {
+137:                 println!(&quot;No logs found.&quot;);
+138:             }
+139:         }
+140:         Some(Commands::Daemon) =&gt; {
+141:             let supervisor = std::sync::Arc::new(Supervisor::new(config));
+142:             supervisor.run_daemon().await?;
+143:         }
+144:     }
+145: 
+146:     Ok(())
+147: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
+ 2: 
+ 3: ## Project Structure &amp; Module Organization
+ 4: 
+ 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
+ 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
+ 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
+ 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
+ 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
+10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
+11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
+12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
+13: 
+14: ## Build, Test, and Development Commands
+15: 
+16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
+17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
+18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
+19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
+21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
+22: - `autopilot current`: Shows details for the currently active campaign.
+23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
+24: 
+25: ## Coding Style &amp; Naming Conventions
+26: 
+27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
+28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
+29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
+30: 
+31: ## Testing Guidelines
+32: 
+33: - **Validation**: Run `cargo test --all` before submitting any change.
+34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
+35: 
+36: ## Commit &amp; Pull Request Guidelines
+37: 
+38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
+39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/supervisor.rs">  1: use std::collections::HashSet;
+  2: use std::fs;
+  3: use std::path::{Path, PathBuf};
+  4: use std::process::Command;
+  5: use std::sync::{Arc, Mutex as StdMutex};
+  6: use std::time::{Duration, Instant};
+  7: use anyhow::{bail, Result};
+  8: use chrono::Utc;
+  9: use serde_json::json;
+ 10: use tokio::sync::{Mutex, Semaphore};
+ 11: use crate::campaign::{load_all_campaigns, Campaign, CampaignStatus};
+ 12: use crate::config::AppConfig;
+ 13: use crate::prompts::PromptManager;
+ 14: 
+ 15: static GIT_WORKTREE_LOCK: StdMutex&lt;()&gt; = StdMutex::new(());
+ 16: 
+ 17: pub struct Supervisor {
+ 18:     config: AppConfig,
+ 19:     active_tasks: Arc&lt;Mutex&lt;HashSet&lt;String&gt;&gt;&gt;,
+ 20:     semaphore: Arc&lt;Semaphore&gt;,
+ 21: }
+ 22: 
+ 23: impl Supervisor {
+ 24:     pub fn new(config: AppConfig) -&gt; Self {
+ 25:         let max_concurrent = config.max_concurrent_tasks.max(1);
+ 26:         Self {
+ 27:             config,
+ 28:             active_tasks: Arc::new(Mutex::new(HashSet::new())),
+ 29:             semaphore: Arc::new(Semaphore::new(max_concurrent)),
+ 30:         }
+ 31:     }
+ 32: 
+ 33:     pub async fn run_daemon(self: Arc&lt;Self&gt;) -&gt; Result&lt;()&gt; {
+ 34:         println!(
+ 35:             &quot;Autopilot 24/7 Autonomous Engineering Daemon started (parallel capacity: {}).&quot;,
+ 36:             self.config.max_concurrent_tasks
+ 37:         );
+ 38:         println!(&quot;Tasks directory: {:?}&quot;, self.config.tasks_dir());
+ 39: 
+ 40:         // 1. Recover and reconnect any active parallel sessions
+ 41:         self.recover_active_sessions().await;
+ 42: 
+ 43:         let mut consecutive_empty = 0;
+ 44: 
+ 45:         loop {
+ 46:             let campaigns = load_all_campaigns(&amp;self.config);
+ 47:             let pending_list: Vec&lt;_&gt; = campaigns
+ 48:                 .into_iter()
+ 49:                 .filter(|c| c.status == CampaignStatus::Pending)
+ 50:                 .collect();
+ 51: 
+ 52:             if pending_list.is_empty() {
+ 53:                 consecutive_empty += 1;
+ 54:                 if consecutive_empty % 15 == 0 {
+ 55:                     let active_cnt = self.active_tasks.lock().await.len();
+ 56:                     println!(
+ 57:                         &quot;Standing by for new campaigns ({} currently active in parallel)...&quot;,
+ 58:                         active_cnt
+ 59:                     );
+ 60:                 }
+ 61:                 tokio::time::sleep(Duration::from_secs(self.config.poll_interval_seconds.min(2))).await;
+ 62:                 continue;
+ 63:             }
+ 64: 
+ 65:             consecutive_empty = 0;
+ 66: 
+ 67:             for campaign in pending_list {
+ 68:                 let mut active_lock = self.active_tasks.lock().await;
+ 69:                 if active_lock.contains(&amp;campaign.id) {
+ 70:                     continue;
+ 71:                 }
+ 72: 
+ 73:                 // Acquire parallel slot
+ 74:                 match self.semaphore.clone().try_acquire_owned() {
+ 75:                     Ok(permit) =&gt; {
+ 76:                         println!(
+ 77:                             &quot;Claiming campaign #{} for {} (engine: {}) [parallel slot acquired]&quot;,
+ 78:                             campaign.id, campaign.repo, campaign.agent
+ 79:                         );
+ 80: 
+ 81:                         let claimed_path = match self.mark_status(&amp;campaign.file_path, &quot;claimed&quot;) {
+ 82:                             Ok(p) =&gt; p,
+ 83:                             Err(e) =&gt; {
+ 84:                                 eprintln!(&quot;Failed to claim campaign #{}: {:?}&quot;, campaign.id, e);
+ 85:                                 continue;
+ 86:                             }
+ 87:                         };
+ 88: 
+ 89:                         active_lock.insert(campaign.id.clone());
+ 90:                         drop(active_lock);
+ 91: 
+ 92:                         let mut c_clone = campaign.clone();
+ 93:                         c_clone.file_path = claimed_path;
+ 94:                         let self_arc = Arc::clone(&amp;self);
+ 95: 
+ 96:                         tokio::spawn(async move {
+ 97:                             let _permit = permit;
+ 98:                             let cid = c_clone.id.clone();
+ 99:                             let claimed_file = c_clone.file_path.clone();
+100: 
+101:                             let self_exec = Arc::clone(&amp;self_arc);
+102:                             let outcome = tokio::task::spawn_blocking(move || {
+103:                                 self_exec.execute_campaign(&amp;c_clone)
+104:                             })
+105:                             .await;
+106: 
+107:                             match outcome {
+108:                                 Ok(Ok(true)) =&gt; {
+109:                                     println!(&quot;Campaign #{} finished successfully.&quot;, cid);
+110:                                     let _ = self_arc.mark_status(&amp;claimed_file, &quot;done&quot;);
+111:                                 }
+112:                                 Ok(Ok(false)) =&gt; {
+113:                                     println!(&quot;Campaign #{} concluded with incomplete/failure state.&quot;, cid);
+114:                                     let _ = self_arc.mark_status(&amp;claimed_file, &quot;failed&quot;);
+115:                                 }
+116:                                 Ok(Err(e)) =&gt; {
+117:                                     eprintln!(&quot;Error executing campaign #{}: {:?}&quot;, cid, e);
+118:                                     let _ = self_arc.mark_status(&amp;claimed_file, &quot;failed&quot;);
+119:                                 }
+120:                                 Err(join_err) =&gt; {
+121:                                     eprintln!(&quot;Campaign #{} thread panicked: {:?}&quot;, cid, join_err);
+122:                                     let _ = self_arc.mark_status(&amp;claimed_file, &quot;failed&quot;);
+123:                                 }
+124:                             }
+125: 
+126:                             // Clean up task state file
+127:                             let state_file = self_arc.config.state_dir().join(format!(&quot;task-{}.json&quot;, cid));
+128:                             let _ = fs::remove_file(state_file);
+129: 
+130:                             self_arc.active_tasks.lock().await.remove(&amp;cid);
+131:                         });
+132:                     }
+133:                     Err(_) =&gt; {
+134:                         // All parallel slots occupied, wait for an active task to finish
+135:                         break;
+136:                     }
+137:                 }
+138:             }
+139: 
+140:             tokio::time::sleep(Duration::from_secs(1)).await;
+141:         }
+142:     }
+143: 
+144:     async fn recover_active_sessions(&amp;self) {
+145:         let campaigns = load_all_campaigns(&amp;self.config);
+146:         let claimed_list: Vec&lt;_&gt; = campaigns
+147:             .into_iter()
+148:             .filter(|c| c.status == CampaignStatus::Claimed || c.status == CampaignStatus::Running)
+149:             .collect();
+150: 
+151:         for c in claimed_list {
+152:             let session_name = format!(&quot;autopilot-{}&quot;, c.id);
+153:             let has_session = Command::new(&quot;tmux&quot;).args([&quot;has-session&quot;, &quot;-t&quot;, &amp;session_name]).output();
+154:             let is_alive = has_session.map(|o| o.status.success()).unwrap_or(false);
+155: 
+156:             let has_legacy = Command::new(&quot;tmux&quot;).args([&quot;has-session&quot;, &quot;-t&quot;, &quot;codex-live&quot;]).output();
+157:             let is_legacy_alive = has_legacy.map(|o| o.status.success()).unwrap_or(false);
+158: 
+159:             if is_alive || (c.id == &quot;011&quot; &amp;&amp; is_legacy_alive) {
+160:                 let live_session = if is_alive { session_name } else { &quot;codex-live&quot;.to_string() };
+161:                 println!(&quot;Reconnecting supervisor to live session &apos;{}&apos; for campaign #{}...&quot;, live_session, c.id);
+162:                 self.active_tasks.lock().await.insert(c.id.clone());
+163: 
+164:                 let self_clone = Arc::new(self.clone());
+165:                 let worktree_dir = self.config.worktrees_dir().join(format!(&quot;task-{}&quot;, c.id));
+166:                 let claimed_file = c.file_path.clone();
+167:                 let cid = c.id.clone();
+168:                 let max_iter = c.max_iterations;
+169: 
+170:                 let self_monitor = Arc::clone(&amp;self_clone);
+171:                 let sess_for_task = live_session.clone();
+172:                 tokio::spawn(async move {
+173:                     let cid_blk = cid.clone();
+174:                     let outcome = tokio::task::spawn_blocking(move || {
+175:                         self_monitor.monitor_session(&amp;worktree_dir, &amp;sess_for_task, &amp;cid_blk, 1, max_iter)
+176:                     })
+177:                     .await;
+178: 
+179:                     if let Ok(Ok(true)) = outcome {
+180:                         let _ = self_clone.mark_status(&amp;claimed_file, &quot;done&quot;);
+181:                     } else {
+182:                         let _ = self_clone.mark_status(&amp;claimed_file, &quot;failed&quot;);
+183:                     }
+184:                     let state_file = self_clone.config.state_dir().join(format!(&quot;task-{}.json&quot;, cid));
+185:                     let _ = fs::remove_file(state_file);
+186:                     self_clone.active_tasks.lock().await.remove(&amp;cid);
+187:                 });
+188:             } else {
+189:                 println!(&quot;Cleaning up orphaned claimed campaign #{}...&quot;, c.id);
+190:                 let _ = self.mark_status(&amp;c.file_path, &quot;failed&quot;);
+191:             }
+192:         }
+193:     }
+194: 
+195:     fn clone(&amp;self) -&gt; Self {
+196:         Self {
+197:             config: self.config.clone(),
+198:             active_tasks: Arc::clone(&amp;self.active_tasks),
+199:             semaphore: Arc::clone(&amp;self.semaphore),
+200:         }
+201:     }
+202: 
+203:     fn mark_status(&amp;self, path: &amp;Path, status: &amp;str) -&gt; Result&lt;PathBuf&gt; {
+204:         let parent = path.parent().unwrap_or_else(|| Path::new(&quot;.&quot;));
+205:         let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+206:         let ext = path.extension().unwrap_or_default().to_string_lossy();
+207: 
+208:         let clean_stem = stem
+209:             .replace(&quot;.claimed&quot;, &quot;&quot;)
+210:             .replace(&quot;.done&quot;, &quot;&quot;)
+211:             .replace(&quot;.failed&quot;, &quot;&quot;)
+212:             .replace(&quot;.stopped&quot;, &quot;&quot;);
+213: 
+214:         let new_name = match status {
+215:             &quot;claimed&quot; =&gt; format!(&quot;{}.claimed.{}&quot;, clean_stem, ext),
+216:             &quot;done&quot; =&gt; format!(&quot;{}.done.{}&quot;, clean_stem, ext),
+217:             &quot;failed&quot; =&gt; format!(&quot;{}.failed.{}&quot;, clean_stem, ext),
+218:             _ =&gt; format!(&quot;{}.{}&quot;, clean_stem, ext),
+219:         };
+220: 
+221:         let new_path = parent.join(new_name);
+222:         if path.exists() &amp;&amp; path != new_path {
+223:             fs::rename(path, &amp;new_path)?;
+224:         }
+225:         Ok(new_path)
+226:     }
+227: 
+228:     fn resolve_repo_dir(&amp;self, repo_name: &amp;str) -&gt; Result&lt;PathBuf&gt; {
+229:         let cand1 = PathBuf::from(format!(&quot;/home/ubuntu/github-projects/{}&quot;, repo_name));
+230:         if cand1.exists() {
+231:             return Ok(cand1);
+232:         }
+233:         let cand2 = self.config.repos_dir().join(repo_name);
+234:         if cand2.exists() {
+235:             return Ok(cand2);
+236:         }
+237:         let cand3 = PathBuf::from(&quot;/home/ubuntu/github-projects/codex-autonomous-worker&quot;);
+238:         if cand3.exists() {
+239:             return Ok(cand3);
+240:         }
+241:         bail!(&quot;Repository &apos;{}&apos; not found&quot;, repo_name);
+242:     }
+243: 
+244:     fn setup_worktree(&amp;self, repo_path: &amp;Path, branch_name: &amp;str, worktree_path: &amp;Path) -&gt; Result&lt;()&gt; {
+245:         let _guard = GIT_WORKTREE_LOCK.lock().unwrap();
+246: 
+247:         if worktree_path.exists() {
+248:             let _ = Command::new(&quot;git&quot;)
+249:                 .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;worktree&quot;, &quot;remove&quot;, &quot;--force&quot;, &amp;worktree_path.to_string_lossy()])
+250:                 .output();
+251:             let _ = fs::remove_dir_all(worktree_path);
+252:         }
+253: 
+254:         let _ = Command::new(&quot;git&quot;)
+255:             .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;fetch&quot;, &quot;--all&quot;])
+256:             .output();
+257: 
+258:         let base_ref_out = Command::new(&quot;git&quot;)
+259:             .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;rev-parse&quot;, &quot;--verify&quot;, &quot;main&quot;])
+260:             .output();
+261:         let base_ref = if base_ref_out.map(|o| o.status.success()).unwrap_or(false) {
+262:             &quot;main&quot;
+263:         } else {
+264:             &quot;master&quot;
+265:         };
+266: 
+267:         let add_out = Command::new(&quot;git&quot;)
+268:             .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;worktree&quot;, &quot;add&quot;, &quot;-b&quot;, branch_name, &amp;worktree_path.to_string_lossy(), base_ref])
+269:             .output()?;
+270: 
+271:         if !add_out.status.success() {
+272:             let add_existing = Command::new(&quot;git&quot;)
+273:                 .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;worktree&quot;, &quot;add&quot;, &amp;worktree_path.to_string_lossy(), branch_name])
+274:                 .output()?;
+275:             if !add_existing.status.success() {
+276:                 bail!(&quot;Failed to create worktree: {}&quot;, String::from_utf8_lossy(&amp;add_existing.stderr));
+277:             }
+278:         }
+279: 
+280:         Ok(())
+281:     }
+282: 
+283:     fn cleanup_worktree(&amp;self, repo_path: &amp;Path, worktree_path: &amp;Path) {
+284:         let _guard = GIT_WORKTREE_LOCK.lock().unwrap();
+285:         let _ = Command::new(&quot;git&quot;)
+286:             .args([&quot;-C&quot;, &amp;repo_path.to_string_lossy(), &quot;worktree&quot;, &quot;remove&quot;, &quot;--force&quot;, &amp;worktree_path.to_string_lossy()])
+287:             .output();
+288:         let _ = fs::remove_dir_all(worktree_path);
+289:     }
+290: 
+291:     fn send_keys_to_session(&amp;self, session_name: &amp;str, text: &amp;str) {
+292:         // Clear input field cleanly without sending raw Escape which unfocuses OpenCode
+293:         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;C-a&quot;]).output();
+294:         std::thread::sleep(Duration::from_millis(50));
+295:         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;C-k&quot;]).output();
+296:         std::thread::sleep(Duration::from_millis(50));
+297:         // Send literal text with -l flag so tmux does not interpret brackets [ as copy mode
+298:         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;-l&quot;, text]).output();
+299:         std::thread::sleep(Duration::from_millis(200));
+300:         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;C-m&quot;]).output();
+301:     }
+302: 
+303:     fn execute_campaign(&amp;self, campaign: &amp;Campaign) -&gt; Result&lt;bool&gt; {
+304:         let repo_dir = self.resolve_repo_dir(&amp;campaign.repo)?;
+305:         let worktree_dir = self.config.worktrees_dir().join(format!(&quot;task-{}&quot;, campaign.id));
+306:         let branch_name = format!(&quot;agent/task-{}-{}&quot;, campaign.id, Utc::now().timestamp());
+307:         let session_name = format!(&quot;autopilot-{}&quot;, campaign.id);
+308: 
+309:         let system_prompt = PromptManager::system_prompt(&amp;self.config);
+310:         let full_prompt = format!(&quot;{}
+311: 
+312: Task Description:
+313: {}&quot;, system_prompt, campaign.prompt);
+314: 
+315:         self.setup_worktree(&amp;repo_dir, &amp;branch_name, &amp;worktree_dir)?;
+316: 
+317:         // Write full prompt directly to worktree_dir/prompt.txt
+318:         let prompt_file = worktree_dir.join(&quot;prompt.txt&quot;);
+319:         fs::write(&amp;prompt_file, &amp;full_prompt)?;
+320: 
+321:         // If OpenCode, configure model appropriately
+322:         let opencode_model = if campaign.model.is_empty() {
+323:             &quot;cliproxy/antigravity/gemini-3.8-flash-high&quot;.to_string()
+324:         } else if campaign.model.starts_with(&quot;cliproxy/&quot;)
+325:             || campaign.model.starts_with(&quot;opencode/&quot;)
+326:             || campaign.model.starts_with(&quot;bifrost/&quot;)
+327:         {
+328:             campaign.model.clone()
+329:         } else {
+330:             format!(&quot;cliproxy/{}&quot;, campaign.model)
+331:         };
+332: 
+333:         if campaign.agent == &quot;opencode&quot; {
+334:             let local_cfg = json!({
+335:                 &quot;model&quot;: opencode_model
+336:             });
+337:             let _ = fs::write(
+338:                 worktree_dir.join(&quot;opencode.json&quot;),
+339:                 serde_json::to_string_pretty(&amp;local_cfg).unwrap_or_default(),
+340:             );
+341:         }
+342: 
+343:         let cliproxy_url = &amp;self.config.cliproxy.url;
+344:         let catalog_json = &amp;self.config.cliproxy.catalog_json;
+345: 
+346:         // Generate robust bash launcher script
+347:         let launcher_content = if campaign.agent == &quot;opencode&quot; {
+348:             format!(
+349:                 r#&quot;#!/usr/bin/env bash
+350: export PATH=&quot;/home/ubuntu/.opencode/bin:/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH&quot;
+351: PROMPT_CONTENT=$(cat &quot;{}&quot;)
+352: opencode --auto --prompt &quot;$PROMPT_CONTENT&quot;
+353: EXIT_CODE=$?
+354: echo &quot;OpenCode exited with code $EXIT_CODE&quot;
+355: if [ $EXIT_CODE -ne 0 ]; then
+356:     sleep 30
+357: fi
+358: &quot;#,
+359:                 prompt_file.display()
+360:             )
+361:         } else {
+362:             format!(
+363:                 r#&quot;#!/usr/bin/env bash
+364: export PATH=&quot;/home/ubuntu/.opencode/bin:/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH&quot;
+365: PROMPT_CONTENT=$(cat &quot;{}&quot;)
+366: codex -C &quot;{}&quot; -c openai_base_url=&quot;{}&quot; -c model=&quot;{}&quot; -c model_catalog_json=&quot;{}&quot; --dangerously-bypass-approvals-and-sandbox &quot;$PROMPT_CONTENT&quot;
+367: EXIT_CODE=$?
+368: echo &quot;Codex exited with code $EXIT_CODE&quot;
+369: if [ $EXIT_CODE -ne 0 ]; then
+370:     sleep 30
+371: fi
+372: &quot;#,
+373:                 prompt_file.display(),
+374:                 worktree_dir.display(),
+375:                 cliproxy_url,
+376:                 campaign.model,
+377:                 catalog_json
+378:             )
+379:         };
+380: 
+381:         let run_agent_path = worktree_dir.join(&quot;run_agent.sh&quot;);
+382:         fs::write(&amp;run_agent_path, launcher_content)?;
+383: 
+384:         #[cfg(unix)]
+385:         {
+386:             use std::os::unix::fs::PermissionsExt;
+387:             if let Ok(meta) = fs::metadata(&amp;run_agent_path) {
+388:                 let mut perms = meta.permissions();
+389:                 perms.set_mode(0o755);
+390:                 let _ = fs::set_permissions(&amp;run_agent_path, perms);
+391:             }
+392:         }
+393: 
+394:         // Write initial task state file
+395:         let task_state = json!({
+396:             &quot;task_id&quot;: campaign.id,
+397:             &quot;repo&quot;: campaign.repo,
+398:             &quot;branch&quot;: branch_name,
+399:             &quot;agent&quot;: campaign.agent,
+400:             &quot;model&quot;: if campaign.agent == &quot;opencode&quot; { &amp;opencode_model } else { &amp;campaign.model },
+401:             &quot;iteration&quot;: 1,
+402:             &quot;max_iterations&quot;: campaign.max_iterations,
+403:             &quot;status&quot;: &quot;running&quot;,
+404:             &quot;started_at&quot;: Utc::now().to_rfc3339(),
+405:         });
+406:         let _ = fs::create_dir_all(self.config.state_dir());
+407:         let _ = fs::write(
+408:             self.config.state_dir().join(format!(&quot;task-{}.json&quot;, campaign.id)),
+409:             serde_json::to_string_pretty(&amp;task_state).unwrap_or_default(),
+410:         );
+411: 
+412:         // Kill any previous session with this task id
+413:         let _ = Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, &amp;session_name]).output();
+414: 
+415:         // Start isolated parallel tmux session
+416:         let res = Command::new(&quot;tmux&quot;)
+417:             .args([
+418:                 &quot;new-session&quot;,
+419:                 &quot;-d&quot;,
+420:                 &quot;-s&quot;,
+421:                 &amp;session_name,
+422:                 &quot;-x&quot;,
+423:                 &quot;140&quot;,
+424:                 &quot;-y&quot;,
+425:                 &quot;45&quot;,
+426:                 &quot;-c&quot;,
+427:                 &amp;worktree_dir.to_string_lossy(),
+428:                 &amp;run_agent_path.to_string_lossy(),
+429:             ])
+430:             .output()?;
+431:         if !res.status.success() {
+432:             bail!(&quot;Failed to start tmux session: {}&quot;, String::from_utf8_lossy(&amp;res.stderr));
+433:         }
+434: 
+435:         let success = self.monitor_session(&amp;worktree_dir, &amp;session_name, &amp;campaign.id, 1, campaign.max_iterations)?;
+436: 
+437:         let status_out = Command::new(&quot;git&quot;)
+438:             .args([&quot;-C&quot;, &amp;worktree_dir.to_string_lossy(), &quot;status&quot;, &quot;--porcelain&quot;])
+439:             .output()?;
+440:         let has_changes = !status_out.stdout.is_empty();
+441: 
+442:         if success &amp;&amp; has_changes {
+443:             let _ = Command::new(&quot;git&quot;)
+444:                 .args([&quot;-C&quot;, &amp;worktree_dir.to_string_lossy(), &quot;add&quot;, &quot;.&quot;])
+445:                 .output();
+446:             let _ = Command::new(&quot;git&quot;)
+447:                 .args([&quot;-C&quot;, &amp;worktree_dir.to_string_lossy(), &quot;commit&quot;, &quot;-m&quot;, &quot;chore: final checkpoint for campaign&quot;])
+448:                 .output();
+449:         }
+450: 
+451:         self.cleanup_worktree(&amp;repo_dir, &amp;worktree_dir);
+452: 
+453:         Ok(success)
+454:     }
+455: 
+456:     fn monitor_session(
+457:         &amp;self,
+458:         worktree_path: &amp;Path,
+459:         session_name: &amp;str,
+460:         task_id: &amp;str,
+461:         start_iteration: u32,
+462:         max_iterations: u32,
+463:     ) -&gt; Result&lt;bool&gt; {
+464:         let mut current_iteration = start_iteration;
+465:         let mut consecutive_idle_seconds = 0;
+466:         let mut consecutive_errors = 0;
+467:         let start_time = Instant::now();
+468:         let timeout = Duration::from_secs(self.config.task_timeout_seconds);
+469:         let idle_limit = self.config.idle_timeout_seconds.max(15);
+470:         std::thread::sleep(Duration::from_millis(1000));
+471: 
+472:         while start_time.elapsed() &lt; timeout {
+473:             let has_session = Command::new(&quot;tmux&quot;).args([&quot;has-session&quot;, &quot;-t&quot;, session_name]).output()?;
+474:             if !has_session.status.success() {
+475:                 println!(&quot;Session &apos;{}&apos; ended after {:?}.&quot;, session_name, start_time.elapsed());
+476:                 break;
+477:             }
+478: 
+479:             let pane_out = Command::new(&quot;tmux&quot;).args([&quot;capture-pane&quot;, &quot;-pt&quot;, session_name]).output()?;
+480:             let pane_text = String::from_utf8_lossy(&amp;pane_out.stdout);
+481: 
+482:             let is_working = pane_text.contains(&quot;esc to interrupt&quot;)
+483:                 || pane_text.contains(&quot;esc interrupt&quot;)
+484:                 || pane_text.contains(&quot;Working (&quot;);
+485: 
+486:             let has_error = pane_text.contains(r#&quot;&quot;type&quot;:&quot;error&quot;&quot;#)
+487:                 || pane_text.contains(&quot;status code: 400&quot;)
+488:                 || pane_text.contains(&quot;502 Bad Gateway&quot;)
+489:                 || pane_text.contains(&quot;500 Internal&quot;)
+490:                 || pane_text.contains(&quot;429 Too Many Requests&quot;)
+491:                 || pane_text.contains(r#&quot;&quot;code&quot;:429&quot;#)
+492:                 || pane_text.contains(r#&quot;&quot;status&quot;:429&quot;#)
+493:                 || pane_text.contains(&quot;rate_limit&quot;)
+494:                 || pane_text.contains(&quot;ConnectionRefused&quot;);
+495: 
+496:             let is_idle_at_prompt = !is_working
+497:                 &amp;&amp; (pane_text.contains(&quot;Ask Codex to do anything&quot;)
+498:                     || pane_text.contains(&quot;Ask anything&quot;)
+499:                     || pane_text.contains(&quot;ctrl+p commands&quot;)
+500:                     || pane_text.contains(&quot;shift+tab&quot;)
+501:                     || pane_text.contains(&apos;›&apos;));
+502: 
+503:             if has_error &amp;&amp; is_idle_at_prompt {
+504:                 consecutive_errors += 1;
+505:                 if consecutive_errors &gt;= 4 {
+506:                     eprintln!(&quot;Session &apos;{}&apos; encountered 4 consecutive unrecoverable errors. Concluding...&quot;, session_name);
+507:                     let _ = Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, session_name]).output();
+508:                     return Ok(false);
+509:                 }
+510: 
+511:                 if pane_text.contains(&quot;429&quot;) || pane_text.contains(&quot;rate_limit&quot;) || pane_text.contains(&quot;502&quot;) {
+512:                     let backoff = self.config.rate_limit_backoff_seconds.min(60).max(15);
+513:                     println!(&quot;Session &apos;{}&apos;: rate-limit/gateway error (429/502). Cooling down for {}s...&quot;, session_name, backoff);
+514:                     std::thread::sleep(Duration::from_secs(backoff));
+515:                     let cd_msg = PromptManager::rate_limit_cooldown(&amp;self.config);
+516:                     self.send_keys_to_session(session_name, &amp;cd_msg);
+517:                 } else {
+518:                     println!(&quot;Session &apos;{}&apos;: upstream API error detected. Injecting recovery directive...&quot;, session_name);
+519:                     std::thread::sleep(Duration::from_secs(5));
+520:                     let rec_msg = PromptManager::recovery(&amp;self.config);
+521:                     self.send_keys_to_session(session_name, &amp;rec_msg);
+522:                 }
+523:                 consecutive_idle_seconds = 0;
+524:                 std::thread::sleep(Duration::from_secs(3));
+525:                 continue;
+526:             }
+527: 
+528:             if is_idle_at_prompt {
+529:                 consecutive_idle_seconds += 2;
+530: 
+531:                 if consecutive_idle_seconds &gt;= idle_limit {
+532:                     if current_iteration &lt; max_iterations {
+533:                         println!(
+534:                             &quot;Session &apos;{}&apos;: Iteration {} complete. Checkpointing and injecting heartbeat directive #{}/{}...&quot;,
+535:                             session_name, current_iteration, current_iteration + 1, max_iterations
+536:                         );
+537: 
+538:                         // 1. Git checkpoint
+539:                         let status_out = Command::new(&quot;git&quot;).args([&quot;-C&quot;, &amp;worktree_path.to_string_lossy(), &quot;status&quot;, &quot;--porcelain&quot;]).output()?;
+540:                         if !status_out.stdout.is_empty() {
+541:                             let _ = Command::new(&quot;git&quot;).args([&quot;-C&quot;, &amp;worktree_path.to_string_lossy(), &quot;add&quot;, &quot;.&quot;]).output();
+542:                             let msg = format!(&quot;chore: autopilot continuous loop checkpoint - iteration #{}&quot;, current_iteration);
+543:                             let _ = Command::new(&quot;git&quot;).args([&quot;-C&quot;, &amp;worktree_path.to_string_lossy(), &quot;commit&quot;, &quot;-m&quot;, &amp;msg]).output();
+544:                         }
+545: 
+546:                         current_iteration += 1;
+547: 
+548:                         // Update task-{id}.json state
+549:                         let state_file = self.config.state_dir().join(format!(&quot;task-{}.json&quot;, task_id));
+550:                         if let Ok(content) = fs::read_to_string(&amp;state_file) {
+551:                             if let Ok(mut v) = serde_json::from_str::&lt;serde_json::Value&gt;(&amp;content) {
+552:                                 v[&quot;iteration&quot;] = json!(current_iteration);
+553:                                 v[&quot;last_checkpoint&quot;] = json!(Utc::now().to_rfc3339());
+554:                                 let _ = fs::write(&amp;state_file, serde_json::to_string_pretty(&amp;v).unwrap_or_default());
+555:                             }
+556:                         }
+557: 
+558:                         // 2. Inject heartbeat
+559:                         let directive = PromptManager::heartbeat(&amp;self.config, current_iteration, max_iterations);
+560:                         self.send_keys_to_session(session_name, &amp;directive);
+561: 
+562:                         consecutive_idle_seconds = 0;
+563:                         std::thread::sleep(Duration::from_secs(3));
+564:                         continue;
+565:                     } else {
+566:                         println!(&quot;Session &apos;{}&apos; reached max iterations ({}/{}). Concluding...&quot;, session_name, current_iteration, max_iterations);
+567:                         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;C-c&quot;]).output();
+568:                         std::thread::sleep(Duration::from_millis(500));
+569:                         let _ = Command::new(&quot;tmux&quot;).args([&quot;send-keys&quot;, &quot;-t&quot;, session_name, &quot;C-d&quot;]).output();
+570:                         std::thread::sleep(Duration::from_secs(1));
+571:                         let _ = Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, session_name]).output();
+572:                         break;
+573:                     }
+574:                 }
+575:             } else {
+576:                 consecutive_idle_seconds = 0;
+577:                 consecutive_errors = 0;
+578:             }
+579: 
+580:             std::thread::sleep(Duration::from_secs(2));
+581:         }
+582: 
+583:         let _ = Command::new(&quot;tmux&quot;).args([&quot;kill-session&quot;, &quot;-t&quot;, session_name]).output();
+584:         let completed = current_iteration &gt;= max_iterations;
+585:         Ok(completed)
+586:     }
+587: }</file><file path="src/tui/app.rs">  1: use std::time::Instant;
+  2: use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+  3: use crate::campaign::{
+  4:     find_session_for_campaign, load_all_campaigns, queue_campaign,
+  5:     Campaign, CampaignStatus,
+  6: };
+  7: use crate::config::AppConfig;
+  8: use crate::prompts::PromptManager;
+  9: use crate::models::{get_codex_models, get_opencode_models, ModelInfo};
+ 10: use crate::tui::pty::PtySession;
+ 11: 
+ 12: #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ 13: pub enum FocusedPane {
+ 14:     Sidebar,
+ 15:     Terminal,
+ 16: }
+ 17: 
+ 18: #[derive(Debug, Clone, PartialEq, Eq)]
+ 19: pub enum ModalStep {
+ 20:     SelectRepo,
+ 21:     SelectEngine,
+ 22:     SelectModel,
+ 23:     SelectMode,
+ 24:     EnterPrompt,
+ 25: }
+ 26: 
+ 27: #[derive(Debug, Clone)]
+ 28: pub struct EngineOption {
+ 29:     pub id: &amp;&apos;static str,
+ 30:     pub label: &amp;&apos;static str,
+ 31: }
+ 32: 
+ 33: #[derive(Debug, Clone)]
+ 34: pub struct ModelOption {
+ 35:     pub id: String,
+ 36:     pub label: String,
+ 37: }
+ 38: 
+ 39: #[derive(Debug, Clone)]
+ 40: pub struct ModeOption {
+ 41:     pub id: &amp;&apos;static str,
+ 42:     pub label: &amp;&apos;static str,
+ 43:     pub iterations: u32,
+ 44: }
+ 45: 
+ 46: #[derive(Debug, Clone)]
+ 47: pub struct ModalState {
+ 48:     pub step: ModalStep,
+ 49:     pub repos: Vec&lt;String&gt;,
+ 50:     pub selected_repo_idx: usize,
+ 51:     pub engines: Vec&lt;EngineOption&gt;,
+ 52:     pub selected_engine_idx: usize,
+ 53:     pub models: Vec&lt;ModelOption&gt;,
+ 54:     pub selected_model_idx: usize,
+ 55:     pub model_filter: String,
+ 56:     pub modes: Vec&lt;ModeOption&gt;,
+ 57:     pub selected_mode_idx: usize,
+ 58:     pub prompt_buffer: String,
+ 59:     pub cursor_pos: usize,
+ 60: }
+ 61: 
+ 62: impl ModalState {
+ 63:     pub fn new(available_repos: Vec&lt;String&gt;) -&gt; Self {
+ 64:         let engines = vec![
+ 65:             EngineOption {
+ 66:                 id: &quot;codex&quot;,
+ 67:                 label: &quot;OpenAI Codex (Default autonomous worker)&quot;,
+ 68:             },
+ 69:             EngineOption {
+ 70:                 id: &quot;opencode&quot;,
+ 71:                 label: &quot;OpenCode v2 (Local agent)&quot;,
+ 72:             },
+ 73:         ];
+ 74: 
+ 75:         let modes = vec![
+ 76:             ModeOption {
+ 77:                 id: &quot;continuous&quot;,
+ 78:                 label: &quot;⟳ 24/7 Continuous Loop (30 iterations, test-driven)&quot;,
+ 79:                 iterations: 30,
+ 80:             },
+ 81:             ModeOption {
+ 82:                 id: &quot;single&quot;,
+ 83:                 label: &quot;⊡ Single-Turn Task (1 turn quick fix)&quot;,
+ 84:                 iterations: 1,
+ 85:             },
+ 86:         ];
+ 87: 
+ 88:         // Initial default models from Codex
+ 89:         let codex_models = get_codex_models();
+ 90:         let models = codex_models
+ 91:             .into_iter()
+ 92:             .map(|m| ModelOption {
+ 93:                 id: m.id,
+ 94:                 label: m.display_name,
+ 95:             })
+ 96:             .collect();
+ 97: 
+ 98:         Self {
+ 99:             step: ModalStep::SelectRepo,
+100:             repos: available_repos,
+101:             selected_repo_idx: 0,
+102:             engines,
+103:             selected_engine_idx: 0,
+104:             models,
+105:             selected_model_idx: 0,
+106:             model_filter: String::new(),
+107:             modes,
+108:             selected_mode_idx: 0,
+109:             prompt_buffer: PromptManager::default_task(&amp;AppConfig::default()),
+110:             cursor_pos: 0,
+111:         }
+112:     }
+113: 
+114:     pub fn selected_repo(&amp;self) -&gt; &amp;str {
+115:         if self.repos.is_empty() {
+116:             &quot;chess-repertoire-srs&quot;
+117:         } else {
+118:             &amp;self.repos[self.selected_repo_idx % self.repos.len()]
+119:         }
+120:     }
+121: 
+122:     pub fn selected_engine(&amp;self) -&gt; &amp;EngineOption {
+123:         &amp;self.engines[self.selected_engine_idx % self.engines.len()]
+124:     }
+125: 
+126:     pub fn selected_mode(&amp;self) -&gt; &amp;ModeOption {
+127:         &amp;self.modes[self.selected_mode_idx % self.modes.len()]
+128:     }
+129: 
+130:     pub fn filtered_models(&amp;self) -&gt; Vec&lt;(usize, &amp;ModelOption)&gt; {
+131:         if self.model_filter.trim().is_empty() {
+132:             self.models.iter().enumerate().collect()
+133:         } else {
+134:             let query = self.model_filter.trim().to_lowercase();
+135:             self.models
+136:                 .iter()
+137:                 .enumerate()
+138:                 .filter(|(_, m)| {
+139:                     m.id.to_lowercase().contains(&amp;query) || m.label.to_lowercase().contains(&amp;query)
+140:                 })
+141:                 .collect()
+142:         }
+143:     }
+144: 
+145:     pub fn selected_model(&amp;self) -&gt; Option&lt;&amp;ModelOption&gt; {
+146:         let filtered = self.filtered_models();
+147:         if filtered.is_empty() {
+148:             None
+149:         } else {
+150:             let idx = self.selected_model_idx.min(filtered.len().saturating_sub(1));
+151:             Some(filtered[idx].1)
+152:         }
+153:     }
+154: 
+155:     pub fn load_dynamic_models(&amp;mut self) {
+156:         let engine = self.selected_engine().id;
+157:         let dynamic_list: Vec&lt;ModelInfo&gt; = if engine == &quot;opencode&quot; {
+158:             get_opencode_models()
+159:         } else {
+160:             get_codex_models()
+161:         };
+162: 
+163:         self.models = dynamic_list
+164:             .into_iter()
+165:             .map(|m| ModelOption {
+166:                 id: m.id,
+167:                 label: m.display_name,
+168:             })
+169:             .collect();
+170:         self.selected_model_idx = 0;
+171:         self.model_filter.clear();
+172:     }
+173: }
+174: 
+175: pub struct App {
+176:     pub config: AppConfig,
+177:     pub campaigns: Vec&lt;Campaign&gt;,
+178:     pub selected_index: usize,
+179:     pub scroll_offset: usize,
+180:     pub focused_pane: FocusedPane,
+181:     pub pty: PtySession,
+182:     pub modal: Option&lt;ModalState&gt;,
+183:     pub message: Option&lt;(String, Instant)&gt;,
+184:     pub should_quit: bool,
+185:     pub available_repos: Vec&lt;String&gt;,
+186: }
+187: 
+188: impl App {
+189:     pub fn new(config: AppConfig) -&gt; Self {
+190:         let available_repos = Self::detect_repos();
+191:         let mut app = Self {
+192:             config,
+193:             campaigns: Vec::new(),
+194:             selected_index: 0,
+195:             scroll_offset: 0,
+196:             focused_pane: FocusedPane::Sidebar,
+197:             pty: PtySession::default(),
+198:             modal: None,
+199:             message: None,
+200:             should_quit: false,
+201:             available_repos,
+202:         };
+203:         app.refresh();
+204:         app
+205:     }
+206: 
+207:     pub fn detect_repos() -&gt; Vec&lt;String&gt; {
+208:         let projects_dir = std::path::Path::new(&quot;/home/ubuntu/github-projects&quot;);
+209:         let mut repos = Vec::new();
+210:         if projects_dir.exists() {
+211:             if let Ok(entries) = std::fs::read_dir(projects_dir) {
+212:                 for entry in entries.flatten() {
+213:                     let path = entry.path();
+214:                     if path.is_dir() &amp;&amp; path.join(&quot;.git&quot;).exists() {
+215:                         repos.push(path.file_name().unwrap_or_default().to_string_lossy().to_string());
+216:                     }
+217:                 }
+218:             }
+219:         }
+220:         repos.sort();
+221:         if let Some(pos) = repos.iter().position(|r| r == &quot;chess-repertoire-srs&quot;) {
+222:             let r = repos.remove(pos);
+223:             repos.insert(0, r);
+224:         }
+225:         if repos.is_empty() {
+226:             repos.push(&quot;chess-repertoire-srs&quot;.to_string());
+227:         }
+228:         repos
+229:     }
+230: 
+231:     pub fn refresh(&amp;mut self) {
+232:         self.campaigns = load_all_campaigns(&amp;self.config);
+233:         if self.selected_index &gt;= self.campaigns.len() &amp;&amp; !self.campaigns.is_empty() {
+234:             self.selected_index = self.campaigns.len() - 1;
+235:         }
+236:     }
+237: 
+238:     pub fn next(&amp;mut self, term_h: u16, term_w: u16) {
+239:         if !self.campaigns.is_empty() {
+240:             let prev_idx = self.selected_index;
+241:             self.selected_index = (self.selected_index + 1) % self.campaigns.len();
+242:             let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+243:             if self.selected_index &gt;= self.scroll_offset + visible_cards {
+244:                 self.scroll_offset = self.selected_index - visible_cards + 1;
+245:             } else if self.selected_index &lt; self.scroll_offset {
+246:                 self.scroll_offset = self.selected_index;
+247:             }
+248:             if self.selected_index != prev_idx {
+249:                 self.sync_pty_with_selection(term_h, term_w);
+250:             }
+251:         }
+252:     }
+253: 
+254:     pub fn previous(&amp;mut self, term_h: u16, term_w: u16) {
+255:         if !self.campaigns.is_empty() {
+256:             let prev_idx = self.selected_index;
+257:             if self.selected_index &gt; 0 {
+258:                 self.selected_index -= 1;
+259:             } else {
+260:                 self.selected_index = self.campaigns.len() - 1;
+261:             }
+262:             let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+263:             if self.selected_index &lt; self.scroll_offset {
+264:                 self.scroll_offset = self.selected_index;
+265:             } else if self.selected_index &gt;= self.scroll_offset + visible_cards {
+266:                 self.scroll_offset = self.selected_index - visible_cards + 1;
+267:             }
+268:             if self.selected_index != prev_idx {
+269:                 self.sync_pty_with_selection(term_h, term_w);
+270:             }
+271:         }
+272:     }
+273: 
+274:     pub fn select_index(&amp;mut self, idx: usize, term_h: u16, term_w: u16) {
+275:         if idx &lt; self.campaigns.len() {
+276:             let prev_idx = self.selected_index;
+277:             self.selected_index = idx;
+278:             let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+279:             if self.selected_index &lt; self.scroll_offset {
+280:                 self.scroll_offset = self.selected_index;
+281:             } else if self.selected_index &gt;= self.scroll_offset + visible_cards {
+282:                 self.scroll_offset = self.selected_index - visible_cards + 1;
+283:             }
+284:             if self.selected_index != prev_idx {
+285:                 self.sync_pty_with_selection(term_h, term_w);
+286:             }
+287:         }
+288:     }
+289: 
+290:     pub fn selected_campaign(&amp;self) -&gt; Option&lt;&amp;Campaign&gt; {
+291:         self.campaigns.get(self.selected_index)
+292:     }
+293: 
+294:     pub fn set_message(&amp;mut self, text: impl Into&lt;String&gt;) {
+295:         self.message = Some((text.into(), Instant::now()));
+296:     }
+297: 
+298:     pub fn open_new_campaign_modal(&amp;mut self) {
+299:         let mut state = ModalState::new(self.available_repos.clone());
+300:         state.cursor_pos = state.prompt_buffer.len();
+301:         self.modal = Some(state);
+302:     }
+303: 
+304:     pub fn close_modal(&amp;mut self) {
+305:         self.modal = None;
+306:     }
+307: 
+308:     pub fn cancel_selected_campaign(&amp;mut self, term_h: u16, term_w: u16) {
+309:         let campaign = match self.selected_campaign() {
+310:             Some(c) =&gt; c.clone(),
+311:             None =&gt; return,
+312:         };
+313: 
+314:         if campaign.status != CampaignStatus::Running &amp;&amp; campaign.status != CampaignStatus::Claimed {
+315:             self.set_message(format!(&quot;Task #{} is not currently running.&quot;, campaign.id));
+316:             return;
+317:         }
+318: 
+319:         let _ = crate::campaign::cancel_campaign_by_id(&amp;self.config, &amp;campaign.id);
+320: 
+321:         self.set_message(format!(&quot;Stopped task #{}. Parallel slot freed.&quot;, campaign.id));
+322:         self.pty.kill();
+323:         self.refresh();
+324:         self.sync_pty_with_selection(term_h, term_w);
+325:     }
+326: 
+327:     pub fn sync_pty_with_selection(&amp;mut self, term_rows: u16, term_cols: u16) {
+328:         let campaign = match self.selected_campaign() {
+329:             Some(c) =&gt; c.clone(),
+330:             None =&gt; {
+331:                 self.pty.kill();
+332:                 return;
+333:             }
+334:         };
+335: 
+336:         if self.pty.active_task_id.as_deref() == Some(&amp;campaign.id) &amp;&amp; self.pty.is_running() {
+337:             return;
+338:         }
+339: 
+340:         let repo_dir = {
+341:             let cand = std::path::PathBuf::from(format!(&quot;/home/ubuntu/github-projects/{}&quot;, campaign.repo));
+342:             if cand.exists() {
+343:                 cand
+344:             } else {
+345:                 self.config.repos_dir().join(&amp;campaign.repo)
+346:             }
+347:         };
+348: 
+349:         if campaign.status == CampaignStatus::Running || campaign.status == CampaignStatus::Claimed {
+350:             let task_session = format!(&quot;autopilot-{}&quot;, campaign.id);
+351:             // Check if per-task session exists, else fallback to codex-live
+352:             let has_task_sess = std::process::Command::new(&quot;tmux&quot;)
+353:                 .args([&quot;has-session&quot;, &quot;-t&quot;, &amp;task_session])
+354:                 .output()
+355:                 .map(|o| o.status.success())
+356:                 .unwrap_or(false);
+357: 
+358:             let attach_target = if has_task_sess { task_session } else { &quot;codex-live&quot;.to_string() };
+359: 
+360:             let _ = self.pty.spawn(
+361:                 campaign.id.clone(),
+362:                 &quot;tmux&quot;,
+363:                 &amp;[&quot;attach&quot;, &quot;-t&quot;, &amp;attach_target],
+364:                 &amp;repo_dir,
+365:                 term_rows,
+366:                 term_cols,
+367:             );
+368:         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
+369:             if campaign.agent == &quot;opencode&quot; {
+370:                 let _ = self.pty.spawn(
+371:                     campaign.id.clone(),
+372:                     &quot;opencode&quot;,
+373:                     &amp;[&quot;--auto&quot;, &quot;--continue&quot;, &amp;repo_dir.to_string_lossy()],
+374:                     &amp;repo_dir,
+375:                     term_rows,
+376:                     term_cols,
+377:                 );
+378:             } else if let Some(session_id) = find_session_for_campaign(&amp;campaign.id) {
+379:                 let model_flag = format!(&quot;model={}&quot;, campaign.model);
+380:                 let _ = self.pty.spawn(
+381:                     campaign.id.clone(),
+382:                     &quot;codex&quot;,
+383:                     &amp;[
+384:                         &quot;resume&quot;,
+385:                         &amp;session_id,
+386:                         &quot;-C&quot;,
+387:                         &amp;repo_dir.to_string_lossy(),
+388:                         &quot;-c&quot;,
+389:                         &quot;openai_base_url=http://127.0.0.1:8317/v1&quot;,
+390:                         &quot;-c&quot;,
+391:                         &quot;model_catalog_json=/home/ubuntu/.codex/model-catalogs/gateway.json&quot;,
+392:                         &quot;-c&quot;,
+393:                         &amp;model_flag,
+394:                         &quot;--dangerously-bypass-approvals-and-sandbox&quot;,
+395:                     ],
+396:                     &amp;repo_dir,
+397:                     term_rows,
+398:                     term_cols,
+399:                 );
+400:             } else {
+401:                 self.pty.kill();
+402:             }
+403:         } else {
+404:             self.pty.kill();
+405:         }
+406:     }
+407: 
+408:     pub fn handle_modal_key(&amp;mut self, key: KeyEvent, term_h: u16, term_w: u16) -&gt; bool {
+409:         let mut should_queue = false;
+410:         if let Some(ref mut modal) = self.modal {
+411:             match modal.step {
+412:                 ModalStep::SelectRepo =&gt; match key.code {
+413:                     KeyCode::Esc =&gt; {
+414:                         self.modal = None;
+415:                     }
+416:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+417:                         if modal.selected_repo_idx &gt; 0 {
+418:                             modal.selected_repo_idx -= 1;
+419:                         } else {
+420:                             modal.selected_repo_idx = modal.repos.len().saturating_sub(1);
+421:                         }
+422:                     }
+423:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+424:                         if !modal.repos.is_empty() {
+425:                             modal.selected_repo_idx = (modal.selected_repo_idx + 1) % modal.repos.len();
+426:                         }
+427:                     }
+428:                     KeyCode::Enter =&gt; {
+429:                         modal.step = ModalStep::SelectEngine;
+430:                     }
+431:                     _ =&gt; {}
+432:                 },
+433:                 ModalStep::SelectEngine =&gt; match key.code {
+434:                     KeyCode::Esc =&gt; {
+435:                         self.modal = None;
+436:                     }
+437:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+438:                         if modal.selected_engine_idx &gt; 0 {
+439:                             modal.selected_engine_idx -= 1;
+440:                         } else {
+441:                             modal.selected_engine_idx = modal.engines.len().saturating_sub(1);
+442:                         }
+443:                     }
+444:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+445:                         if !modal.engines.is_empty() {
+446:                             modal.selected_engine_idx = (modal.selected_engine_idx + 1) % modal.engines.len();
+447:                         }
+448:                     }
+449:                     KeyCode::Enter =&gt; {
+450:                         // Dynamically load models for the chosen engine
+451:                         modal.load_dynamic_models();
+452:                         modal.step = ModalStep::SelectModel;
+453:                     }
+454:                     _ =&gt; {}
+455:                 },
+456:                 ModalStep::SelectModel =&gt; {
+457:                     let total = modal.filtered_models().len();
+458:                     match key.code {
+459:                         KeyCode::Esc =&gt; {
+460:                             if !modal.model_filter.is_empty() {
+461:                                 modal.model_filter.clear();
+462:                                 modal.selected_model_idx = 0;
+463:                             } else {
+464:                                 self.modal = None;
+465:                             }
+466:                         }
+467:                         KeyCode::Up =&gt; {
+468:                             if modal.selected_model_idx &gt; 0 {
+469:                                 modal.selected_model_idx -= 1;
+470:                             } else if total &gt; 0 {
+471:                                 modal.selected_model_idx = total - 1;
+472:                             }
+473:                         }
+474:                         KeyCode::Down =&gt; {
+475:                             if total &gt; 0 {
+476:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+477:                             }
+478:                         }
+479:                         KeyCode::PageUp =&gt; {
+480:                             modal.selected_model_idx = modal.selected_model_idx.saturating_sub(10);
+481:                         }
+482:                         KeyCode::PageDown =&gt; {
+483:                             if total &gt; 0 {
+484:                                 modal.selected_model_idx = (modal.selected_model_idx + 10).min(total - 1);
+485:                             }
+486:                         }
+487:                         KeyCode::Home =&gt; {
+488:                             modal.selected_model_idx = 0;
+489:                         }
+490:                         KeyCode::End =&gt; {
+491:                             if total &gt; 0 {
+492:                                 modal.selected_model_idx = total - 1;
+493:                             }
+494:                         }
+495:                         KeyCode::Char(&apos;k&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+496:                             if modal.selected_model_idx &gt; 0 {
+497:                                 modal.selected_model_idx -= 1;
+498:                             } else if total &gt; 0 {
+499:                                 modal.selected_model_idx = total - 1;
+500:                             }
+501:                         }
+502:                         KeyCode::Char(&apos;j&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+503:                             if total &gt; 0 {
+504:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+505:                             }
+506:                         }
+507:                         KeyCode::Char(&apos;u&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+508:                             modal.model_filter.clear();
+509:                             modal.selected_model_idx = 0;
+510:                         }
+511:                         KeyCode::Char(c) =&gt; {
+512:                             modal.model_filter.push(c);
+513:                             modal.selected_model_idx = 0;
+514:                         }
+515:                         KeyCode::Backspace =&gt; {
+516:                             modal.model_filter.pop();
+517:                             modal.selected_model_idx = 0;
+518:                         }
+519:                         KeyCode::Enter =&gt; {
+520:                             if total &gt; 0 {
+521:                                 modal.step = ModalStep::SelectMode;
+522:                             }
+523:                         }
+524:                         _ =&gt; {}
+525:                     }
+526:                 }
+527:                 ModalStep::SelectMode =&gt; match key.code {
+528:                     KeyCode::Esc =&gt; {
+529:                         self.modal = None;
+530:                     }
+531:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+532:                         if modal.selected_mode_idx &gt; 0 {
+533:                             modal.selected_mode_idx -= 1;
+534:                         } else {
+535:                             modal.selected_mode_idx = modal.modes.len().saturating_sub(1);
+536:                         }
+537:                     }
+538:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+539:                         if !modal.modes.is_empty() {
+540:                             modal.selected_mode_idx = (modal.selected_mode_idx + 1) % modal.modes.len();
+541:                         }
+542:                     }
+543:                     KeyCode::Enter =&gt; {
+544:                         if modal.selected_mode().id == &quot;single&quot; {
+545:                             modal.prompt_buffer = &quot;Inspect codebase and resolve open issue&quot;.to_string();
+546:                             modal.cursor_pos = modal.prompt_buffer.len();
+547:                         }
+548:                         modal.step = ModalStep::EnterPrompt;
+549:                     }
+550:                     _ =&gt; {}
+551:                 },
+552:                 ModalStep::EnterPrompt =&gt; match key.code {
+553:                     KeyCode::Esc =&gt; {
+554:                         self.modal = None;
+555:                     }
+556:                     KeyCode::Enter =&gt; {
+557:                         should_queue = true;
+558:                     }
+559:                     KeyCode::Backspace =&gt; {
+560:                         if modal.cursor_pos &gt; 0 &amp;&amp; modal.cursor_pos &lt;= modal.prompt_buffer.len() {
+561:                             modal.prompt_buffer.remove(modal.cursor_pos - 1);
+562:                             modal.cursor_pos -= 1;
+563:                         }
+564:                     }
+565:                     KeyCode::Delete =&gt; {
+566:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
+567:                             modal.prompt_buffer.remove(modal.cursor_pos);
+568:                         }
+569:                     }
+570:                     KeyCode::Left =&gt; {
+571:                         if modal.cursor_pos &gt; 0 {
+572:                             modal.cursor_pos -= 1;
+573:                         }
+574:                     }
+575:                     KeyCode::Right =&gt; {
+576:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
+577:                             modal.cursor_pos += 1;
+578:                         }
+579:                     }
+580:                     KeyCode::Char(c) =&gt; {
+581:                         if !key.modifiers.contains(KeyModifiers::CONTROL) &amp;&amp; !key.modifiers.contains(KeyModifiers::ALT) {
+582:                             modal.prompt_buffer.insert(modal.cursor_pos, c);
+583:                             modal.cursor_pos += 1;
+584:                         }
+585:                     }
+586:                     _ =&gt; {}
+587:                 },
+588:             }
+589:         }
+590: 
+591:         if should_queue {
+592:             if let Some(modal) = self.modal.take() {
+593:                 let repo = modal.selected_repo().to_string();
+594:                 let engine_opt = modal.selected_engine();
+595:                 let mode_opt = modal.selected_mode();
+596:                 let model_str = modal.selected_model().map(|m| m.id.as_str());
+597:                 let prompt = modal.prompt_buffer.trim().to_string();
+598: 
+599:                 if !prompt.is_empty() {
+600:                     match queue_campaign(
+601:                         &amp;self.config,
+602:                         &amp;repo,
+603:                         &amp;prompt,
+604:                         mode_opt.id,
+605:                         mode_opt.iterations,
+606:                         model_str,
+607:                         Some(engine_opt.id),
+608:                     ) {
+609:                         Ok(id) =&gt; {
+610:                             self.set_message(format!(
+611:                                 &quot;{} #{} queued with {} on {}! (Starting in parallel slot)&quot;,
+612:                                 if mode_opt.id == &quot;continuous&quot; { &quot;24/7 Loop&quot; } else { &quot;Task&quot; },
+613:                                 id,
+614:                                 engine_opt.label.split(&apos;(&apos;).next().unwrap_or(engine_opt.id).trim(),
+615:                                 repo
+616:                             ));
+617:                             self.refresh();
+618:                             self.selected_index = 0;
+619:                             self.sync_pty_with_selection(term_h, term_w);
+620:                         }
+621:                         Err(e) =&gt; {
+622:                             self.set_message(format!(&quot;Error queueing campaign: {}&quot;, e));
+623:                         }
+624:                     }
+625:                 }
+626:             }
+627:         }
+628: 
+629:         false
+630:     }
+631: }</file><file path="src/tui/mod.rs">  1: pub mod app;
+  2: pub mod pty;
+  3: pub mod ui;
+  4: 
+  5: use std::io::{stdout, Stdout};
+  6: use std::time::Duration;
+  7: use anyhow::Result;
+  8: use crossterm::{
+  9:     event::{self, Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind},
+ 10:     execute,
+ 11:     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+ 12: };
+ 13: use ratatui::{backend::CrosstermBackend, Terminal};
+ 14: use crate::config::AppConfig;
+ 15: use self::app::{App, FocusedPane};
+ 16: 
+ 17: pub fn run_tui(config: AppConfig) -&gt; Result&lt;()&gt; {
+ 18:     enable_raw_mode()?;
+ 19:     let mut stdout = stdout();
+ 20:     execute!(
+ 21:         stdout,
+ 22:         EnterAlternateScreen,
+ 23:         crossterm::event::EnableMouseCapture
+ 24:     )?;
+ 25:     let backend = CrosstermBackend::new(stdout);
+ 26:     let mut terminal = Terminal::new(backend)?;
+ 27: 
+ 28:     let mut app = App::new(config);
+ 29:     let tick_rate = Duration::from_millis(30);
+ 30: 
+ 31:     let res = run_loop(&amp;mut terminal, &amp;mut app, tick_rate);
+ 32: 
+ 33:     // Clean terminal restoration
+ 34:     disable_raw_mode()?;
+ 35:     execute!(
+ 36:         terminal.backend_mut(),
+ 37:         LeaveAlternateScreen,
+ 38:         crossterm::event::DisableMouseCapture
+ 39:     )?;
+ 40:     terminal.show_cursor()?;
+ 41: 
+ 42:     // Clean up PTY child if running
+ 43:     app.pty.kill();
+ 44: 
+ 45:     res
+ 46: }
+ 47: 
+ 48: fn run_loop(
+ 49:     terminal: &amp;mut Terminal&lt;CrosstermBackend&lt;Stdout&gt;&gt;,
+ 50:     app: &amp;mut App,
+ 51:     tick_rate: Duration,
+ 52: ) -&gt; Result&lt;()&gt; {
+ 53:     let mut last_refresh = std::time::Instant::now();
+ 54:     let mut pty_initialized = false;
+ 55: 
+ 56:     while !app.should_quit {
+ 57:         terminal.draw(|f| ui::draw(f, app))?;
+ 58: 
+ 59:         let (term_cols, term_rows) = crossterm::terminal::size()?;
+ 60:         // Workspace inner dimensions (sidebar is 32 cols, banners take ~6 lines)
+ 61:         let workspace_w = term_cols.saturating_sub(34).max(20);
+ 62:         let workspace_h = term_rows.saturating_sub(8).max(10);
+ 63: 
+ 64:         // Auto-load selected task into PTY on startup
+ 65:         if !pty_initialized {
+ 66:             app.sync_pty_with_selection(workspace_h, workspace_w);
+ 67:             pty_initialized = true;
+ 68:         }
+ 69: 
+ 70:         if event::poll(tick_rate)? {
+ 71:             match event::read()? {
+ 72:                 Event::Key(key) =&gt; {
+ 73:                     if app.modal.is_some() {
+ 74:                         app.handle_modal_key(key, workspace_h, workspace_w);
+ 75:                     } else if app.focused_pane == FocusedPane::Terminal {
+ 76:                         match key.code {
+ 77:                             KeyCode::F(6) | KeyCode::Tab =&gt; {
+ 78:                                 // Toggle focus back to sidebar
+ 79:                                 app.focused_pane = FocusedPane::Sidebar;
+ 80:                             }
+ 81:                             KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) =&gt; {
+ 82:                                 app.focused_pane = FocusedPane::Sidebar;
+ 83:                             }
+ 84:                             KeyCode::Char(&apos;w&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+ 85:                                 app.focused_pane = FocusedPane::Sidebar;
+ 86:                             }
+ 87:                             // Crucial: Esc must be forwarded to Codex so &apos;esc to interrupt&apos; works!
+ 88:                             _ =&gt; {
+ 89:                                 forward_key_to_pty(&amp;mut app.pty, key)?;
+ 90:                             }
+ 91:                         }
+ 92:                     } else {
+ 93:                         // Focused on Sidebar
+ 94:                         match key.code {
+ 95:                             KeyCode::Char(&apos;q&apos;) | KeyCode::Esc =&gt; {
+ 96:                                 app.should_quit = true;
+ 97:                             }
+ 98:                             KeyCode::Char(&apos;c&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+ 99:                                 app.should_quit = true;
+100:                             }
+101:                             KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+102:                                 app.next(workspace_h, workspace_w);
+103:                             }
+104:                             KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+105:                                 app.previous(workspace_h, workspace_w);
+106:                             }
+107:                             KeyCode::Char(&apos;r&apos;) =&gt; {
+108:                                 app.refresh();
+109:                                 app.sync_pty_with_selection(workspace_h, workspace_w);
+110:                                 app.set_message(&quot;Refreshed task queue.&quot;);
+111:                             }
+112:                             KeyCode::Char(&apos;n&apos;) =&gt; {
+113:                                 app.open_new_campaign_modal();
+114:                             }
+115:                             KeyCode::Char(&apos;x&apos;) =&gt; {
+116:                                 app.cancel_selected_campaign(workspace_h, workspace_w);
+117:                             }
+118:                             KeyCode::F(6) | KeyCode::Tab =&gt; {
+119:                                 if app.pty.is_running() {
+120:                                     app.focused_pane = FocusedPane::Terminal;
+121:                                 }
+122:                             }
+123:                             KeyCode::Enter =&gt; {
+124:                                 // If PTY is not running, load it, then focus terminal to talk
+125:                                 app.sync_pty_with_selection(workspace_h, workspace_w);
+126:                                 if app.pty.is_running() {
+127:                                     app.focused_pane = FocusedPane::Terminal;
+128:                                     app.set_message(&quot;Focused Codex. Type to interact. [F6/Tab/Esc] returns to sidebar.&quot;);
+129:                                 }
+130:                             }
+131:                             _ =&gt; {}
+132:                         }
+133:                     }
+134:                 }
+135:                 Event::Mouse(mouse_event) =&gt; {
+136:                     if app.modal.is_none() {
+137:                         let click_x = mouse_event.column;
+138:                         let click_y = mouse_event.row;
+139: 
+140:                         // Sidebar is left 32 cols
+141:                         if click_x &lt;= 32 {
+142:                             match mouse_event.kind {
+143:                                 MouseEventKind::Down(MouseButton::Left) =&gt; {
+144:                                     app.focused_pane = FocusedPane::Sidebar;
+145:                                     let start_y = 4;
+146:                                     let card_height = 4;
+147:                                     if click_y &gt;= start_y {
+148:                                         let clicked_card = ((click_y.saturating_sub(start_y)) / card_height) as usize;
+149:                                         let real_idx = clicked_card + app.scroll_offset;
+150:                                         app.select_index(real_idx, workspace_h, workspace_w);
+151:                                     }
+152:                                 }
+153:                                 MouseEventKind::ScrollUp =&gt; {
+154:                                     app.previous(workspace_h, workspace_w);
+155:                                 }
+156:                                 MouseEventKind::ScrollDown =&gt; {
+157:                                     app.next(workspace_h, workspace_w);
+158:                                 }
+159:                                 _ =&gt; {}
+160:                             }
+161:                         } else {
+162:                             // Right workspace pane (Codex or OpenCode live terminal)
+163:                             if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+164:                                 if app.pty.is_running() {
+165:                                     app.focused_pane = FocusedPane::Terminal;
+166:                                 }
+167:                             }
+168:                             if app.pty.is_running() {
+169:                                 forward_mouse_to_pty(&amp;mut app.pty, mouse_event, 34, 4);
+170:                             }
+171:                         }
+172:                     }
+173:                 }
+174:                 Event::Resize(new_cols, new_rows) =&gt; {
+175:                     let w = new_cols.saturating_sub(34).max(20);
+176:                     let h = new_rows.saturating_sub(8).max(10);
+177:                     app.pty.resize(h, w);
+178:                 }
+179:                 _ =&gt; {}
+180:             }
+181:         }
+182: 
+183:         // Auto refresh state every 2 seconds
+184:         if last_refresh.elapsed() &gt;= Duration::from_secs(2) {
+185:             app.refresh();
+186:             last_refresh = std::time::Instant::now();
+187:         }
+188:     }
+189: 
+190:     Ok(())
+191: }
+192: 
+193: fn forward_key_to_pty(pty: &amp;mut crate::tui::pty::PtySession, key: crossterm::event::KeyEvent) -&gt; Result&lt;()&gt; {
+194:     match key.code {
+195:         KeyCode::Char(c) =&gt; {
+196:             if key.modifiers.contains(KeyModifiers::CONTROL) {
+197:                 let byte = match c {
+198:                     &apos;c&apos; =&gt; 0x03,
+199:                     &apos;d&apos; =&gt; 0x04,
+200:                     &apos;z&apos; =&gt; 0x1A,
+201:                     &apos;l&apos; =&gt; 0x0C,
+202:                     _ =&gt; (c as u8) &amp; 0x1F,
+203:                 };
+204:                 pty.write_input(&amp;[byte])?;
+205:             } else {
+206:                 let mut buf = [0u8; 4];
+207:                 let s = c.encode_utf8(&amp;mut buf);
+208:                 pty.write_input(s.as_bytes())?;
+209:             }
+210:         }
+211:         KeyCode::Enter =&gt; pty.write_input(&amp;[13])?,
+212:         KeyCode::Backspace =&gt; pty.write_input(&amp;[0x7F])?,
+213:         KeyCode::Up =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;A&apos;])?,
+214:         KeyCode::Down =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;B&apos;])?,
+215:         KeyCode::Right =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;C&apos;])?,
+216:         KeyCode::Left =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;D&apos;])?,
+217:         KeyCode::Home =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;H&apos;])?,
+218:         KeyCode::End =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;F&apos;])?,
+219:         KeyCode::PageUp =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;5&apos;, b&apos;~&apos;])?,
+220:         KeyCode::PageDown =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;6&apos;, b&apos;~&apos;])?,
+221:         KeyCode::Delete =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;3&apos;, b&apos;~&apos;])?,
+222:         KeyCode::Esc =&gt; pty.write_input(&amp;[0x1B])?,
+223:         _ =&gt; {}
+224:     }
+225:     Ok(())
+226: }
+227: 
+228: 
+229: fn forward_mouse_to_pty(
+230:     pty: &amp;mut crate::tui::pty::PtySession,
+231:     mouse: crossterm::event::MouseEvent,
+232:     offset_x: u16,
+233:     offset_y: u16,
+234: ) {
+235:     if mouse.column &lt; offset_x || mouse.row &lt; offset_y {
+236:         return;
+237:     }
+238:     let pty_col = mouse.column.saturating_sub(offset_x) + 1;
+239:     let pty_row = mouse.row.saturating_sub(offset_y) + 1;
+240: 
+241:     let (btn, is_release) = match mouse.kind {
+242:         MouseEventKind::Down(MouseButton::Left) =&gt; (0, false),
+243:         MouseEventKind::Down(MouseButton::Middle) =&gt; (1, false),
+244:         MouseEventKind::Down(MouseButton::Right) =&gt; (2, false),
+245:         MouseEventKind::Up(MouseButton::Left) =&gt; (0, true),
+246:         MouseEventKind::Up(MouseButton::Middle) =&gt; (1, true),
+247:         MouseEventKind::Up(MouseButton::Right) =&gt; (2, true),
+248:         MouseEventKind::Drag(MouseButton::Left) =&gt; (32, false),
+249:         MouseEventKind::ScrollUp =&gt; (64, false),
+250:         MouseEventKind::ScrollDown =&gt; (65, false),
+251:         _ =&gt; return,
+252:     };
+253: 
+254:     let suffix = if is_release { &apos;m&apos; } else { &apos;M&apos; };
+255:     let seq = format!(&quot;[&lt;{};{};{}{}&quot;, btn, pty_col, pty_row, suffix);
+256:     let _ = pty.write_input(seq.as_bytes());
+257: }</file><file path="src/tui/ui.rs">  1: use ratatui::{
+  2:     layout::{Alignment, Constraint, Direction, Layout, Rect},
+  3:     style::{Color, Modifier, Style},
+  4:     text::{Line, Span},
+  5:     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+  6:     Frame,
+  7: };
+  8: use crate::campaign::CampaignStatus;
+  9: use crate::tui::app::{App, FocusedPane, ModalStep};
+ 10: 
+ 11: pub fn draw(frame: &amp;mut Frame, app: &amp;mut App) {
+ 12:     let size = frame.area();
+ 13: 
+ 14:     let chunks = Layout::default()
+ 15:         .direction(Direction::Vertical)
+ 16:         .constraints([
+ 17:             Constraint::Length(3),
+ 18:             Constraint::Min(8),
+ 19:             Constraint::Length(3),
+ 20:         ])
+ 21:         .split(size);
+ 22: 
+ 23:     draw_top_banner(frame, app, chunks[0]);
+ 24:     draw_main_split(frame, app, chunks[1]);
+ 25:     draw_footer(frame, app, chunks[2]);
+ 26: 
+ 27:     if let Some(ref modal) = app.modal {
+ 28:         draw_modal(frame, modal, size);
+ 29:     }
+ 30: }
+ 31: 
+ 32: fn draw_top_banner(frame: &amp;mut Frame, app: &amp;App, area: Rect) {
+ 33:     let running_cnt = app.campaigns.iter().filter(|c| c.status == CampaignStatus::Running).count();
+ 34:     let queued_cnt = app.campaigns.iter().filter(|c| c.status == CampaignStatus::Pending || c.status == CampaignStatus::Claimed).count();
+ 35:     let done_cnt = app.campaigns.iter().filter(|c| c.status == CampaignStatus::Done).count();
+ 36: 
+ 37:     let (status_text, status_color) = if running_cnt &gt; 0 {
+ 38:         (&quot;[● 24/7 DAEMON: ACTIVE]&quot;, Color::Green)
+ 39:     } else {
+ 40:         (&quot;[○ DAEMON: STANDBY]&quot;, Color::Yellow)
+ 41:     };
+ 42: 
+ 43:     let title_line = Line::from(vec![
+ 44:         Span::styled(&quot; AUTOPILOT CONTROL DECK &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+ 45:         Span::raw(&quot; │ &quot;),
+ 46:         Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+ 47:         Span::raw(&quot; │ &quot;),
+ 48:         Span::styled(format!(&quot;Parallel: {} Active · {} Queued · {} Completed Tasks&quot;, running_cnt, queued_cnt, done_cnt), Style::default().fg(Color::White)),
+ 49:     ]);
+ 50: 
+ 51:     let banner = Paragraph::new(title_line)
+ 52:         .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Color::DarkGray)));
+ 53: 
+ 54:     frame.render_widget(banner, area);
+ 55: }
+ 56: 
+ 57: fn draw_main_split(frame: &amp;mut Frame, app: &amp;mut App, area: Rect) {
+ 58:     let sidebar_w = 32.min(area.width.saturating_sub(40));
+ 59:     let split_chunks = Layout::default()
+ 60:         .direction(Direction::Horizontal)
+ 61:         .constraints([
+ 62:             Constraint::Length(sidebar_w),
+ 63:             Constraint::Min(40),
+ 64:         ])
+ 65:         .split(area);
+ 66: 
+ 67:     draw_sidebar(frame, app, split_chunks[0]);
+ 68:     draw_workspace(frame, app, split_chunks[1]);
+ 69: }
+ 70: 
+ 71: fn draw_sidebar(frame: &amp;mut Frame, app: &amp;App, area: Rect) {
+ 72:     let is_focused = app.focused_pane == FocusedPane::Sidebar;
+ 73:     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+ 74: 
+ 75:     let total_tasks = app.campaigns.len();
+ 76:     let visible_cards = (area.height.saturating_sub(2) / 4).max(1) as usize;
+ 77: 
+ 78:     let mut scroll_offset = app.scroll_offset;
+ 79:     if app.selected_index &gt;= scroll_offset + visible_cards {
+ 80:         scroll_offset = app.selected_index.saturating_sub(visible_cards - 1);
+ 81:     } else if app.selected_index &lt; scroll_offset {
+ 82:         scroll_offset = app.selected_index;
+ 83:     }
+ 84:     if scroll_offset &gt;= total_tasks {
+ 85:         scroll_offset = total_tasks.saturating_sub(visible_cards);
+ 86:     }
+ 87: 
+ 88:     let end_idx = (scroll_offset + visible_cards).min(total_tasks);
+ 89:     let visible_slice = if total_tasks &gt; 0 { &amp;app.campaigns[scroll_offset..end_idx] } else { &amp;[] };
+ 90: 
+ 91:     let items: Vec&lt;ListItem&gt; = visible_slice.iter().enumerate().map(|(slice_idx, c)| {
+ 92:         let real_idx = scroll_offset + slice_idx;
+ 93:         let is_selected = real_idx == app.selected_index;
+ 94: 
+ 95:         let (pill_text, pill_color) = match c.status {
+ 96:             CampaignStatus::Running =&gt; (&quot;[● WRK]&quot;, Color::Green),
+ 97:             CampaignStatus::Claimed =&gt; (&quot;[▶ CLM]&quot;, Color::Yellow),
+ 98:             CampaignStatus::Pending =&gt; (&quot;[○ QUD]&quot;, Color::Magenta),
+ 99:             CampaignStatus::Done =&gt; (&quot;[✔ DON]&quot;, Color::Green),
+100:             CampaignStatus::Failed =&gt; (&quot;[✖ ERR]&quot;, Color::Red),
+101:         };
+102: 
+103:         let prefix = if is_selected { &quot;▸ &quot; } else { &quot;  &quot; };
+104: 
+105:         let line1 = Line::from(vec![
+106:             Span::styled(prefix, Style::default().fg(if is_selected { Color::Cyan } else { Color::DarkGray })),
+107:             Span::styled(pill_text, Style::default().fg(pill_color).add_modifier(Modifier::BOLD)),
+108:             Span::styled(format!(&quot; Task #{} · {}&quot;, c.id, c.age), Style::default().fg(Color::White)),
+109:         ]);
+110: 
+111:         let line2 = Line::from(vec![
+112:             Span::raw(&quot;  &quot;),
+113:             Span::styled(c.prompt.clone(), Style::default().fg(if is_selected { Color::White } else { Color::Gray }).add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() })),
+114:         ]);
+115: 
+116:         let mode_label = if c.mode == &quot;continuous&quot; { &quot;⟳ Loop&quot; } else { &quot;⊡ Task&quot; };
+117:         let line3_text = if c.status == CampaignStatus::Running {
+118:             format!(&quot;  {} · {} · {} #{}/{}&quot;, c.repo, c.agent, mode_label, c.iteration, c.max_iterations)
+119:         } else {
+120:             format!(&quot;  {} · {} · {} ({} iters)&quot;, c.repo, c.agent, mode_label, c.max_iterations)
+121:         };
+122:         let line3 = Line::from(vec![
+123:             Span::styled(line3_text, Style::default().fg(Color::DarkGray)),
+124:         ]);
+125: 
+126:         let line4 = Line::from(Span::styled(&quot;  ──────────────────────────────&quot;, Style::default().fg(Color::Rgb(40, 40, 50))));
+127: 
+128:         let mut item = ListItem::new(vec![line1, line2, line3, line4]);
+129:         if is_selected {
+130:             item = item.style(Style::default().bg(Color::Rgb(30, 32, 48)));
+131:         }
+132:         item
+133:     }).collect();
+134: 
+135:     let scroll_tag = if total_tasks &gt; visible_cards {
+136:         format!(&quot; Tasks ({}) [{}/{}] ▲▼ &quot;, total_tasks, app.selected_index + 1, total_tasks)
+137:     } else {
+138:         format!(&quot; Tasks ({}) &quot;, total_tasks)
+139:     };
+140: 
+141:     let list_widget = List::new(items)
+142:         .block(Block::default()
+143:             .borders(Borders::ALL)
+144:             .title(Span::styled(scroll_tag, Style::default().fg(if is_focused { Color::Cyan } else { Color::Gray }).add_modifier(Modifier::BOLD)))
+145:             .border_style(Style::default().fg(border_color)));
+146: 
+147:     frame.render_widget(list_widget, area);
+148: }
+149: 
+150: fn draw_workspace(frame: &amp;mut Frame, app: &amp;mut App, area: Rect) {
+151:     let is_focused = app.focused_pane == FocusedPane::Terminal;
+152:     let border_color = if is_focused { Color::Green } else { Color::DarkGray };
+153: 
+154:     let pty_has_session = app.pty.active_task_id.is_some();
+155: 
+156:     let title = if is_focused {
+157:         &quot; Live Workspace [FOCUSED - F6/Tab to exit] &quot;
+158:     } else if pty_has_session {
+159:         &quot; Live Workspace [Enter to focus &amp; talk] &quot;
+160:     } else {
+161:         &quot; Workspace [Standing by] &quot;
+162:     };
+163: 
+164:     let block = Block::default()
+165:         .borders(Borders::ALL)
+166:         .title(Span::styled(title, Style::default().fg(if is_focused { Color::Green } else { Color::Cyan }).add_modifier(Modifier::BOLD)))
+167:         .border_style(Style::default().fg(border_color));
+168: 
+169:     let inner = block.inner(area);
+170:     frame.render_widget(block, area);
+171: 
+172:     // If PTY has active session, render the real virtual screen
+173:     if pty_has_session {
+174:         app.pty.render_screen(frame, inner);
+175:         return;
+176:     }
+177: 
+178:     // Otherwise show selected campaign info card
+179:     if let Some(c) = app.selected_campaign() {
+180:         let (status_text, status_color) = match c.status {
+181:             CampaignStatus::Running =&gt; (&quot;RUNNING (Parallel session active)&quot;, Color::Green),
+182:             CampaignStatus::Claimed =&gt; (&quot;CLAIMED (Worktree being provisioned)&quot;, Color::Yellow),
+183:             CampaignStatus::Pending =&gt; (&quot;QUEUED (Ready for parallel execution)&quot;, Color::Magenta),
+184:             CampaignStatus::Done =&gt; (&quot;COMPLETED&quot;, Color::Green),
+185:             CampaignStatus::Failed =&gt; (&quot;FAILED&quot;, Color::Red),
+186:         };
+187: 
+188:         let mode_desc = if c.mode == &quot;continuous&quot; {
+189:             format!(&quot;⟳ 24/7 Continuous Loop (budget: {} iterations)&quot;, c.max_iterations)
+190:         } else {
+191:             &quot;⊡ Single-Turn Task (1 turn quick fix)&quot;.to_string()
+192:         };
+193: 
+194:         let mut lines = Vec::new();
+195: 
+196:         lines.push(Line::from(vec![
+197:             Span::styled(format!(&quot;Task #{}: &quot;, c.id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+198:             Span::styled(c.prompt.clone(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+199:         ]));
+200:         lines.push(Line::from(&quot;&quot;));
+201: 
+202:         lines.push(Line::from(vec![
+203:             Span::styled(&quot;Status:      &quot;, Style::default().fg(Color::Gray)),
+204:             Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+205:         ]));
+206:         lines.push(Line::from(vec![
+207:             Span::styled(&quot;Engine:      &quot;, Style::default().fg(Color::Gray)),
+208:             Span::styled(c.agent.to_uppercase(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+209:             Span::raw(&quot;    &quot;),
+210:             Span::styled(&quot;Mode: &quot;, Style::default().fg(Color::Gray)),
+211:             Span::styled(mode_desc, Style::default().fg(Color::Yellow)),
+212:         ]));
+213:         lines.push(Line::from(vec![
+214:             Span::styled(&quot;Repository:  &quot;, Style::default().fg(Color::Gray)),
+215:             Span::styled(c.repo.clone(), Style::default().fg(Color::White)),
+216:             Span::raw(&quot;    &quot;),
+217:             Span::styled(&quot;Branch: &quot;, Style::default().fg(Color::Gray)),
+218:             Span::styled(c.branch.clone(), Style::default().fg(Color::Yellow)),
+219:         ]));
+220:         if c.agent != &quot;opencode&quot; {
+221:             lines.push(Line::from(vec![
+222:                 Span::styled(&quot;Model:       &quot;, Style::default().fg(Color::Gray)),
+223:                 Span::styled(c.model.clone(), Style::default().fg(Color::Cyan)),
+224:             ]));
+225:         }
+226:         lines.push(Line::from(&quot;&quot;));
+227:         lines.push(Line::from(Span::styled(&quot;─── Status &amp; Details ─────────────────────────────────────────────&quot;, Style::default().fg(Color::DarkGray))));
+228: 
+229:         if c.status == CampaignStatus::Pending {
+230:             lines.push(Line::from(Span::styled(&quot;This task is queued and ready for parallel execution.&quot;, Style::default().fg(Color::Magenta))));
+231:             lines.push(Line::from(Span::styled(&quot;The daemon executes queued tasks concurrently in isolated worktrees.&quot;, Style::default().fg(Color::Gray))));
+232:         } else if c.status == CampaignStatus::Running {
+233:             lines.push(Line::from(Span::styled(&quot;Agent is actively executing in isolated worktree and live tmux session.&quot;, Style::default().fg(Color::Green))));
+234:             lines.push(Line::from(Span::styled(&quot;Press [Enter] to attach and interact live, or [x] to cancel this task.&quot;, Style::default().fg(Color::Cyan))));
+235:         } else if c.status == CampaignStatus::Claimed {
+236:             lines.push(Line::from(Span::styled(&quot;Task claimed by daemon; initializing Git worktree and agent session...&quot;, Style::default().fg(Color::Yellow))));
+237:         } else {
+238:             lines.push(Line::from(Span::styled(&quot;Session recorded. Press [Enter] to open interactive review.&quot;, Style::default().fg(Color::Cyan))));
+239:         }
+240: 
+241:         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+242:         frame.render_widget(paragraph, inner);
+243:     } else {
+244:         let empty_msg = Paragraph::new(&quot;No tasks available. Press [n] to launch a new 24/7 autonomous loop.&quot;)
+245:             .style(Style::default().fg(Color::DarkGray))
+246:             .alignment(Alignment::Center);
+247:         frame.render_widget(empty_msg, inner);
+248:     }
+249: }
+250: 
+251: fn draw_footer(frame: &amp;mut Frame, app: &amp;App, area: Rect) {
+252:     let footer_text = if let Some((ref msg, instant)) = app.message {
+253:         if instant.elapsed().as_secs() &lt; 3 {
+254:             Line::from(Span::styled(format!(&quot; ★ {}&quot;, msg), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
+255:         } else {
+256:             default_footer_line(app)
+257:         }
+258:     } else {
+259:         default_footer_line(app)
+260:     };
+261: 
+262:     let footer = Paragraph::new(footer_text)
+263:         .block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(Color::DarkGray)));
+264: 
+265:     frame.render_widget(footer, area);
+266: }
+267: 
+268: fn default_footer_line(app: &amp;App) -&gt; Line&lt;&apos;static&gt; {
+269:     if app.focused_pane == FocusedPane::Terminal {
+270:         Line::from(vec![
+271:             Span::styled(&quot; [F6 / Tab / Alt-←] &quot;, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+272:             Span::raw(&quot;Focus Sidebar  &quot;),
+273:             Span::styled(&quot;[Esc] &quot;, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+274:             Span::raw(&quot;Interrupt Agent  &quot;),
+275:             Span::styled(&quot;[Type] &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+276:             Span::raw(&quot;Steer Live  &quot;),
+277:         ])
+278:     } else {
+279:         Line::from(vec![
+280:             Span::styled(&quot; [Enter] &quot;, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+281:             Span::raw(&quot;Talk to Agent  &quot;),
+282:             Span::styled(&quot;[n] &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+283:             Span::raw(&quot;New Task  &quot;),
+284:             Span::styled(&quot;[x] &quot;, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+285:             Span::raw(&quot;Stop Task  &quot;),
+286:             Span::styled(&quot;[r] &quot;, Style::default().fg(Color::Cyan)),
+287:             Span::raw(&quot;Refresh  &quot;),
+288:             Span::styled(&quot;[q] &quot;, Style::default().fg(Color::Red)),
+289:             Span::raw(&quot;Quit&quot;),
+290:         ])
+291:     }
+292: }
+293: 
+294: fn draw_modal(frame: &amp;mut Frame, modal: &amp;crate::tui::app::ModalState, screen: Rect) {
+295:     let (width, height) = match modal.step {
+296:         ModalStep::SelectModel =&gt; {
+297:             (
+298:                 86.min(screen.width.saturating_sub(4)),
+299:                 24.min(screen.height.saturating_sub(4)),
+300:             )
+301:         }
+302:         ModalStep::EnterPrompt =&gt; {
+303:             (
+304:                 76.min(screen.width.saturating_sub(4)),
+305:                 12.min(screen.height.saturating_sub(4)),
+306:             )
+307:         }
+308:         _ =&gt; {
+309:             (
+310:                 74.min(screen.width.saturating_sub(4)),
+311:                 14.min(screen.height.saturating_sub(4)),
+312:             )
+313:         }
+314:     };
+315:     let x = (screen.width.saturating_sub(width)) / 2;
+316:     let y = (screen.height.saturating_sub(height)) / 2;
+317:     let modal_area = Rect::new(x, y, width, height);
+318: 
+319:     frame.render_widget(Clear, modal_area);
+320: 
+321:     match modal.step {
+322:         ModalStep::SelectRepo =&gt; {
+323:             let items: Vec&lt;ListItem&gt; = modal.repos.iter().enumerate().map(|(idx, r)| {
+324:                 let is_sel = idx == modal.selected_repo_idx;
+325:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+326:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, r));
+327:                 if is_sel {
+328:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+329:                 }
+330:                 item
+331:             }).collect();
+332: 
+333:             let list = List::new(items)
+334:                 .block(Block::default()
+335:                     .borders(Borders::ALL)
+336:                     .title(&quot; New Task: Select Target Repository (Enter to confirm, Esc to cancel) &quot;)
+337:                     .border_style(Style::default().fg(Color::Cyan)));
+338: 
+339:             frame.render_widget(list, modal_area);
+340:         }
+341:         ModalStep::SelectEngine =&gt; {
+342:             let items: Vec&lt;ListItem&gt; = modal.engines.iter().enumerate().map(|(idx, e)| {
+343:                 let is_sel = idx == modal.selected_engine_idx;
+344:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+345:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, e.label));
+346:                 if is_sel {
+347:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+348:                 }
+349:                 item
+350:             }).collect();
+351: 
+352:             let list = List::new(items)
+353:                 .block(Block::default()
+354:                     .borders(Borders::ALL)
+355:                     .title(&quot; New Task: Select Agent Engine (Codex vs OpenCode) &quot;)
+356:                     .border_style(Style::default().fg(Color::Cyan)));
+357: 
+358:             frame.render_widget(list, modal_area);
+359:         }
+360:         ModalStep::SelectMode =&gt; {
+361:             let items: Vec&lt;ListItem&gt; = modal.modes.iter().enumerate().map(|(idx, m)| {
+362:                 let is_sel = idx == modal.selected_mode_idx;
+363:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+364:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, m.label));
+365:                 if is_sel {
+366:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+367:                 }
+368:                 item
+369:             }).collect();
+370: 
+371:             let list = List::new(items)
+372:                 .block(Block::default()
+373:                     .borders(Borders::ALL)
+374:                     .title(&quot; New Task: Select Execution Mode (Loop vs Single Task) &quot;)
+375:                     .border_style(Style::default().fg(Color::Cyan)));
+376: 
+377:             frame.render_widget(list, modal_area);
+378:         }
+379:         ModalStep::SelectModel =&gt; {
+380:             let engine_name = modal.selected_engine().label.split(&apos;(&apos;).next().unwrap_or(modal.selected_engine().id).trim();
+381:             let filtered = modal.filtered_models();
+382:             let total = filtered.len();
+383: 
+384:             let current_pos = if total &gt; 0 { modal.selected_model_idx + 1 } else { 0 };
+385:             let title_info = if modal.model_filter.is_empty() {
+386:                 format!(&quot; New Task: Select Model for {} [{}/{}] &quot;, engine_name, current_pos, total)
+387:             } else {
+388:                 format!(&quot; New Task: Select Model for {} [Match {}/{}] &quot;, engine_name, current_pos, total)
+389:             };
+390: 
+391:             let block = Block::default()
+392:                 .borders(Borders::ALL)
+393:                 .title(title_info)
+394:                 .border_style(Style::default().fg(Color::Cyan));
+395: 
+396:             let inner = block.inner(modal_area);
+397:             frame.render_widget(block, modal_area);
+398: 
+399:             let chunks = Layout::default()
+400:                 .direction(Direction::Vertical)
+401:                 .constraints([
+402:                     Constraint::Length(2), // Search bar &amp; navigation hints
+403:                     Constraint::Min(4),    // Scrollable list
+404:                 ])
+405:                 .split(inner);
+406: 
+407:             // Search filter row
+408:             let filter_line = if modal.model_filter.is_empty() {
+409:                 Line::from(vec![
+410:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+411:                     Span::styled(&quot;(Type to filter models...)  &quot;, Style::default().fg(Color::DarkGray)),
+412:                     Span::styled(&quot;[↑/↓] &quot;, Style::default().fg(Color::Green)),
+413:                     Span::raw(&quot;Scroll  &quot;),
+414:                     Span::styled(&quot;[PgUp/PgDn] &quot;, Style::default().fg(Color::Yellow)),
+415:                     Span::raw(&quot;Page  &quot;),
+416:                     Span::styled(&quot;[Enter] &quot;, Style::default().fg(Color::Cyan)),
+417:                     Span::raw(&quot;Select&quot;),
+418:                 ])
+419:             } else {
+420:                 Line::from(vec![
+421:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+422:                     Span::styled(format!(&quot;&apos;{}&apos;█ &quot;, modal.model_filter), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+423:                     Span::styled(&quot;(Backspace deletes, Esc/Ctrl-U clears filter)&quot;, Style::default().fg(Color::DarkGray)),
+424:                 ])
+425:             };
+426:             let sep_line = Line::from(Span::styled(&quot;  ──────────────────────────────────────────────────────────────────────────────&quot;, Style::default().fg(Color::Rgb(40, 42, 58))));
+427:             let search_widget = Paragraph::new(vec![filter_line, sep_line]);
+428:             frame.render_widget(search_widget, chunks[0]);
+429: 
+430:             // Scrollable List Area
+431:             let list_area = chunks[1];
+432:             let visible_rows = list_area.height as usize;
+433:             let mut scroll_offset = 0;
+434:             if modal.selected_model_idx &gt;= visible_rows {
+435:                 scroll_offset = modal.selected_model_idx.saturating_sub(visible_rows.saturating_sub(1));
+436:             }
+437: 
+438:             let end_idx = (scroll_offset + visible_rows).min(total);
+439:             let visible_slice = if total &gt; 0 { &amp;filtered[scroll_offset..end_idx] } else { &amp;[] };
+440: 
+441:             let items: Vec&lt;ListItem&gt; = visible_slice.iter().map(|(real_idx, m)| {
+442:                 let is_sel = *real_idx == modal.selected_model_idx;
+443:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+444:                 let num = real_idx + 1;
+445:                 let text = format!(&quot;{:&gt;2}. {}{}&quot;, num, prefix, m.label);
+446:                 let mut item = ListItem::new(text);
+447:                 if is_sel {
+448:                     item = item.style(
+449:                         Style::default()
+450:                             .fg(Color::Cyan)
+451:                             .add_modifier(Modifier::BOLD)
+452:                             .bg(Color::Rgb(30, 32, 48)),
+453:                     );
+454:                 }
+455:                 item
+456:             }).collect();
+457: 
+458:             if items.is_empty() {
+459:                 let empty = Paragraph::new(format!(&quot;  No models match query &apos;{}&apos;. Press Backspace or Esc to clear.&quot;, modal.model_filter))
+460:                     .style(Style::default().fg(Color::Red));
+461:                 frame.render_widget(empty, list_area);
+462:             } else {
+463:                 let list = List::new(items);
+464:                 frame.render_widget(list, list_area);
+465:             }
+466:         }
+467:         ModalStep::EnterPrompt =&gt; {
+468:             let mode_tag = if modal.selected_mode().id == &quot;continuous&quot; { &quot;24/7 Loop (30 iters)&quot; } else { &quot;Single Task&quot; };
+469:             let engine_tag = modal.selected_engine().id.to_uppercase();
+470:             let title = format!(&quot; New Task: [{}] · [{}] · {} &quot;, modal.selected_repo(), engine_tag, mode_tag);
+471: 
+472:             let block = Block::default()
+473:                 .borders(Borders::ALL)
+474:                 .title(title)
+475:                 .border_style(Style::default().fg(Color::Cyan));
+476: 
+477:             let inner = block.inner(modal_area);
+478:             frame.render_widget(block, modal_area);
+479: 
+480:             let chunks = Layout::default()
+481:                 .direction(Direction::Vertical)
+482:                 .constraints([Constraint::Length(1), Constraint::Min(2), Constraint::Length(1)])
+483:                 .split(inner);
+484: 
+485:             let label = Paragraph::new(format!(&quot;Engine: {} │ Enter campaign objective:&quot;, engine_tag))
+486:                 .style(Style::default().fg(Color::Gray));
+487:             frame.render_widget(label, chunks[0]);
+488: 
+489:             let input = Paragraph::new(modal.prompt_buffer.as_str())
+490:                 .style(Style::default().fg(Color::White).bg(Color::Rgb(30, 32, 48)))
+491:                 .wrap(Wrap { trim: false });
+492:             frame.render_widget(input, chunks[1]);
+493: 
+494:             let hint = Paragraph::new(&quot;[Enter] Launch Campaign    [Esc] Cancel&quot;)
+495:                 .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+496:             frame.render_widget(hint, chunks[2]);
+497:         }
+498:     }
+499: }</file></files></repomix>

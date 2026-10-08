@@ -1,0 +1,1 @@
+[Supervisor Heartbeat - Iteration #{iteration}/{max_iterations}] Checkpoint recorded. Proceed with your systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.

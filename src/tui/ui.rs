@@ -45,7 +45,7 @@ fn draw_top_banner(frame: &mut Frame, app: &App, area: Rect) {
         Span::raw(" │ "),
         Span::styled(status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
         Span::raw(" │ "),
-        Span::styled(format!("Parallel: {} Active · {} Queued · {} Completed", running_cnt, queued_cnt, done_cnt), Style::default().fg(Color::White)),
+        Span::styled(format!("Parallel: {} Active · {} Queued · {} Completed Tasks", running_cnt, queued_cnt, done_cnt), Style::default().fg(Color::White)),
     ]);
 
     let banner = Paragraph::new(title_line)
@@ -72,8 +72,25 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
     let is_focused = app.focused_pane == FocusedPane::Sidebar;
     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
-    let items: Vec<ListItem> = app.campaigns.iter().enumerate().map(|(idx, c)| {
-        let is_selected = idx == app.selected_index;
+    let total_tasks = app.campaigns.len();
+    let visible_cards = (area.height.saturating_sub(2) / 4).max(1) as usize;
+
+    let mut scroll_offset = app.scroll_offset;
+    if app.selected_index >= scroll_offset + visible_cards {
+        scroll_offset = app.selected_index.saturating_sub(visible_cards - 1);
+    } else if app.selected_index < scroll_offset {
+        scroll_offset = app.selected_index;
+    }
+    if scroll_offset >= total_tasks {
+        scroll_offset = total_tasks.saturating_sub(visible_cards);
+    }
+
+    let end_idx = (scroll_offset + visible_cards).min(total_tasks);
+    let visible_slice = if total_tasks > 0 { &app.campaigns[scroll_offset..end_idx] } else { &[] };
+
+    let items: Vec<ListItem> = visible_slice.iter().enumerate().map(|(slice_idx, c)| {
+        let real_idx = scroll_offset + slice_idx;
+        let is_selected = real_idx == app.selected_index;
 
         let (pill_text, pill_color) = match c.status {
             CampaignStatus::Running => ("[● WRK]", Color::Green),
@@ -88,7 +105,7 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
         let line1 = Line::from(vec![
             Span::styled(prefix, Style::default().fg(if is_selected { Color::Cyan } else { Color::DarkGray })),
             Span::styled(pill_text, Style::default().fg(pill_color).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" #{} · {}", c.id, c.age), Style::default().fg(Color::White)),
+            Span::styled(format!(" Task #{} · {}", c.id, c.age), Style::default().fg(Color::White)),
         ]);
 
         let line2 = Line::from(vec![
@@ -115,11 +132,16 @@ fn draw_sidebar(frame: &mut Frame, app: &App, area: Rect) {
         item
     }).collect();
 
-    let title = format!(" Campaigns ({}) ", app.campaigns.len());
+    let scroll_tag = if total_tasks > visible_cards {
+        format!(" Tasks ({}) [{}/{}] ▲▼ ", total_tasks, app.selected_index + 1, total_tasks)
+    } else {
+        format!(" Tasks ({}) ", total_tasks)
+    };
+
     let list_widget = List::new(items)
         .block(Block::default()
             .borders(Borders::ALL)
-            .title(Span::styled(title, Style::default().fg(if is_focused { Color::Cyan } else { Color::Gray }).add_modifier(Modifier::BOLD)))
+            .title(Span::styled(scroll_tag, Style::default().fg(if is_focused { Color::Cyan } else { Color::Gray }).add_modifier(Modifier::BOLD)))
             .border_style(Style::default().fg(border_color)));
 
     frame.render_widget(list_widget, area);
@@ -172,7 +194,7 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
         let mut lines = Vec::new();
 
         lines.push(Line::from(vec![
-            Span::styled(format!("Campaign #{}: ", c.id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("Task #{}: ", c.id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::styled(c.prompt.clone(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::from(""));
@@ -205,13 +227,13 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::from(Span::styled("─── Status & Details ─────────────────────────────────────────────", Style::default().fg(Color::DarkGray))));
 
         if c.status == CampaignStatus::Pending {
-            lines.push(Line::from(Span::styled("This campaign is queued and ready for parallel execution.", Style::default().fg(Color::Magenta))));
-            lines.push(Line::from(Span::styled("The daemon executes queued campaigns concurrently in isolated worktrees.", Style::default().fg(Color::Gray))));
+            lines.push(Line::from(Span::styled("This task is queued and ready for parallel execution.", Style::default().fg(Color::Magenta))));
+            lines.push(Line::from(Span::styled("The daemon executes queued tasks concurrently in isolated worktrees.", Style::default().fg(Color::Gray))));
         } else if c.status == CampaignStatus::Running {
             lines.push(Line::from(Span::styled("Agent is actively executing in isolated worktree and live tmux session.", Style::default().fg(Color::Green))));
-            lines.push(Line::from(Span::styled("Press [Enter] to attach and interact live, or [x] to cancel this campaign.", Style::default().fg(Color::Cyan))));
+            lines.push(Line::from(Span::styled("Press [Enter] to attach and interact live, or [x] to cancel this task.", Style::default().fg(Color::Cyan))));
         } else if c.status == CampaignStatus::Claimed {
-            lines.push(Line::from(Span::styled("Campaign claimed by daemon; initializing Git worktree and agent session...", Style::default().fg(Color::Yellow))));
+            lines.push(Line::from(Span::styled("Task claimed by daemon; initializing Git worktree and agent session...", Style::default().fg(Color::Yellow))));
         } else {
             lines.push(Line::from(Span::styled("Session recorded. Press [Enter] to open interactive review.", Style::default().fg(Color::Cyan))));
         }
@@ -219,7 +241,7 @@ fn draw_workspace(frame: &mut Frame, app: &mut App, area: Rect) {
         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
         frame.render_widget(paragraph, inner);
     } else {
-        let empty_msg = Paragraph::new("No campaigns available. Press [n] to launch a new 24/7 autonomous loop.")
+        let empty_msg = Paragraph::new("No tasks available. Press [n] to launch a new 24/7 autonomous loop.")
             .style(Style::default().fg(Color::DarkGray))
             .alignment(Alignment::Center);
         frame.render_widget(empty_msg, inner);
@@ -258,9 +280,9 @@ fn default_footer_line(app: &App) -> Line<'static> {
             Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::raw("Talk to Agent  "),
             Span::styled("[n] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw("New Campaign  "),
+            Span::raw("New Task  "),
             Span::styled("[x] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::raw("Stop Active  "),
+            Span::raw("Stop Task  "),
             Span::styled("[r] ", Style::default().fg(Color::Cyan)),
             Span::raw("Refresh  "),
             Span::styled("[q] ", Style::default().fg(Color::Red)),
@@ -311,7 +333,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign: Select Target Repository (Enter to confirm, Esc to cancel) ")
+                    .title(" New Task: Select Target Repository (Enter to confirm, Esc to cancel) ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -330,7 +352,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign: Select Agent Engine (Codex vs OpenCode) ")
+                    .title(" New Task: Select Agent Engine (Codex vs OpenCode) ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -349,7 +371,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
             let list = List::new(items)
                 .block(Block::default()
                     .borders(Borders::ALL)
-                    .title(" New Campaign: Select Execution Mode (Loop vs Single Task) ")
+                    .title(" New Task: Select Execution Mode (Loop vs Single Task) ")
                     .border_style(Style::default().fg(Color::Cyan)));
 
             frame.render_widget(list, modal_area);
@@ -361,9 +383,9 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
 
             let current_pos = if total > 0 { modal.selected_model_idx + 1 } else { 0 };
             let title_info = if modal.model_filter.is_empty() {
-                format!(" New Campaign: Select Model for {} [{}/{}] ", engine_name, current_pos, total)
+                format!(" New Task: Select Model for {} [{}/{}] ", engine_name, current_pos, total)
             } else {
-                format!(" New Campaign: Select Model for {} [Match {}/{}] ", engine_name, current_pos, total)
+                format!(" New Task: Select Model for {} [Match {}/{}] ", engine_name, current_pos, total)
             };
 
             let block = Block::default()
@@ -445,7 +467,7 @@ fn draw_modal(frame: &mut Frame, modal: &crate::tui::app::ModalState, screen: Re
         ModalStep::EnterPrompt => {
             let mode_tag = if modal.selected_mode().id == "continuous" { "24/7 Loop (30 iters)" } else { "Single Task" };
             let engine_tag = modal.selected_engine().id.to_uppercase();
-            let title = format!(" New Campaign: [{}] · [{}] · {} ", modal.selected_repo(), engine_tag, mode_tag);
+            let title = format!(" New Task: [{}] · [{}] · {} ", modal.selected_repo(), engine_tag, mode_tag);
 
             let block = Block::default()
                 .borders(Borders::ALL)

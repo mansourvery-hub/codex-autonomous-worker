@@ -10,6 +10,7 @@ use serde_json::json;
 use tokio::sync::{Mutex, Semaphore};
 use crate::campaign::{load_all_campaigns, Campaign, CampaignStatus};
 use crate::config::AppConfig;
+use crate::prompts::PromptManager;
 
 static GIT_WORKTREE_LOCK: StdMutex<()> = StdMutex::new(());
 
@@ -288,12 +289,14 @@ impl Supervisor {
     }
 
     fn send_keys_to_session(&self, session_name: &str, text: &str) {
-        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "Escape"]).output();
-        std::thread::sleep(Duration::from_millis(150));
-        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "C-u"]).output();
-        std::thread::sleep(Duration::from_millis(150));
-        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, text]).output();
-        std::thread::sleep(Duration::from_millis(500));
+        // Clear input field cleanly without sending raw Escape which unfocuses OpenCode
+        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "C-a"]).output();
+        std::thread::sleep(Duration::from_millis(50));
+        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "C-k"]).output();
+        std::thread::sleep(Duration::from_millis(50));
+        // Send literal text with -l flag so tmux does not interpret brackets [ as copy mode
+        let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "-l", text]).output();
+        std::thread::sleep(Duration::from_millis(200));
         let _ = Command::new("tmux").args(["send-keys", "-t", session_name, "C-m"]).output();
     }
 
@@ -303,8 +306,7 @@ impl Supervisor {
         let branch_name = format!("agent/task-{}-{}", campaign.id, Utc::now().timestamp());
         let session_name = format!("autopilot-{}", campaign.id);
 
-        let system_prompt_file = Path::new("/home/ubuntu/codex-worker/task_prompt.md");
-        let system_prompt = fs::read_to_string(system_prompt_file).unwrap_or_default();
+        let system_prompt = PromptManager::system_prompt(&self.config);
         let full_prompt = format!("{}
 
 Task Description:
@@ -479,17 +481,7 @@ fi
 
             let is_working = pane_text.contains("esc to interrupt")
                 || pane_text.contains("esc interrupt")
-                || pane_text.contains("Working (")
-                || pane_text.contains("Thinking")
-                || pane_text.contains("⠋")
-                || pane_text.contains("⠙")
-                || pane_text.contains("⠸")
-                || pane_text.contains("⠼")
-                || pane_text.contains("⠴")
-                || pane_text.contains("⠦")
-                || pane_text.contains("⠧")
-                || pane_text.contains("⠇")
-                || pane_text.contains("⠏");
+                || pane_text.contains("Working (");
 
             let has_error = pane_text.contains(r#""type":"error""#)
                 || pane_text.contains("status code: 400")
@@ -520,11 +512,13 @@ fi
                     let backoff = self.config.rate_limit_backoff_seconds.min(60).max(15);
                     println!("Session '{}': rate-limit/gateway error (429/502). Cooling down for {}s...", session_name, backoff);
                     std::thread::sleep(Duration::from_secs(backoff));
-                    self.send_keys_to_session(session_name, "[Supervisor Recovery] Cooldown complete. Please retry your last action and continue your plan.");
+                    let cd_msg = PromptManager::rate_limit_cooldown(&self.config);
+                    self.send_keys_to_session(session_name, &cd_msg);
                 } else {
                     println!("Session '{}': upstream API error detected. Injecting recovery directive...", session_name);
                     std::thread::sleep(Duration::from_secs(5));
-                    self.send_keys_to_session(session_name, "[Supervisor Recovery] An API error occurred on the previous request. Please proceed with your plan using direct file inspection and editing.");
+                    let rec_msg = PromptManager::recovery(&self.config);
+                    self.send_keys_to_session(session_name, &rec_msg);
                 }
                 consecutive_idle_seconds = 0;
                 std::thread::sleep(Duration::from_secs(3));
@@ -562,10 +556,7 @@ fi
                         }
 
                         // 2. Inject heartbeat
-                        let directive = format!(
-                            "[Supervisor Heartbeat - Iteration #{}/{}] Checkpoint recorded. Proceed with your systematic workflow: check PLAN.md for next item, write test first (red), implement fix (green), verify, and mark complete.",
-                            current_iteration, max_iterations
-                        );
+                        let directive = PromptManager::heartbeat(&self.config, current_iteration, max_iterations);
                         self.send_keys_to_session(session_name, &directive);
 
                         consecutive_idle_seconds = 0;

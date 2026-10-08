@@ -5,6 +5,7 @@ use crate::campaign::{
     Campaign, CampaignStatus,
 };
 use crate::config::AppConfig;
+use crate::prompts::PromptManager;
 use crate::models::{get_codex_models, get_opencode_models, ModelInfo};
 use crate::tui::pty::PtySession;
 
@@ -105,7 +106,7 @@ impl ModalState {
             model_filter: String::new(),
             modes,
             selected_mode_idx: 0,
-            prompt_buffer: "Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively".to_string(),
+            prompt_buffer: PromptManager::default_task(&AppConfig::default()),
             cursor_pos: 0,
         }
     }
@@ -237,7 +238,13 @@ impl App {
     pub fn next(&mut self, term_h: u16, term_w: u16) {
         if !self.campaigns.is_empty() {
             let prev_idx = self.selected_index;
-            self.selected_index = (self.selected_index + 1).min(self.campaigns.len() - 1);
+            self.selected_index = (self.selected_index + 1) % self.campaigns.len();
+            let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+            if self.selected_index >= self.scroll_offset + visible_cards {
+                self.scroll_offset = self.selected_index - visible_cards + 1;
+            } else if self.selected_index < self.scroll_offset {
+                self.scroll_offset = self.selected_index;
+            }
             if self.selected_index != prev_idx {
                 self.sync_pty_with_selection(term_h, term_w);
             }
@@ -245,16 +252,38 @@ impl App {
     }
 
     pub fn previous(&mut self, term_h: u16, term_w: u16) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
-            self.sync_pty_with_selection(term_h, term_w);
+        if !self.campaigns.is_empty() {
+            let prev_idx = self.selected_index;
+            if self.selected_index > 0 {
+                self.selected_index -= 1;
+            } else {
+                self.selected_index = self.campaigns.len() - 1;
+            }
+            let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+            if self.selected_index < self.scroll_offset {
+                self.scroll_offset = self.selected_index;
+            } else if self.selected_index >= self.scroll_offset + visible_cards {
+                self.scroll_offset = self.selected_index - visible_cards + 1;
+            }
+            if self.selected_index != prev_idx {
+                self.sync_pty_with_selection(term_h, term_w);
+            }
         }
     }
 
     pub fn select_index(&mut self, idx: usize, term_h: u16, term_w: u16) {
-        if idx < self.campaigns.len() && idx != self.selected_index {
+        if idx < self.campaigns.len() {
+            let prev_idx = self.selected_index;
             self.selected_index = idx;
-            self.sync_pty_with_selection(term_h, term_w);
+            let visible_cards = (term_h.saturating_sub(4) / 4).max(1) as usize;
+            if self.selected_index < self.scroll_offset {
+                self.scroll_offset = self.selected_index;
+            } else if self.selected_index >= self.scroll_offset + visible_cards {
+                self.scroll_offset = self.selected_index - visible_cards + 1;
+            }
+            if self.selected_index != prev_idx {
+                self.sync_pty_with_selection(term_h, term_w);
+            }
         }
     }
 
@@ -283,13 +312,13 @@ impl App {
         };
 
         if campaign.status != CampaignStatus::Running && campaign.status != CampaignStatus::Claimed {
-            self.set_message(format!("Campaign #{} is not currently running.", campaign.id));
+            self.set_message(format!("Task #{} is not currently running.", campaign.id));
             return;
         }
 
         let _ = crate::campaign::cancel_campaign_by_id(&self.config, &campaign.id);
 
-        self.set_message(format!("Stopped campaign #{}. Parallel slot freed.", campaign.id));
+        self.set_message(format!("Stopped task #{}. Parallel slot freed.", campaign.id));
         self.pty.kill();
         self.refresh();
         self.sync_pty_with_selection(term_h, term_w);

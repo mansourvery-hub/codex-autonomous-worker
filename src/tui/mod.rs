@@ -107,7 +107,7 @@ fn run_loop(
                             KeyCode::Char('r') => {
                                 app.refresh();
                                 app.sync_pty_with_selection(workspace_h, workspace_w);
-                                app.set_message("Refreshed campaign queue.");
+                                app.set_message("Refreshed task queue.");
                             }
                             KeyCode::Char('n') => {
                                 app.open_new_campaign_modal();
@@ -134,24 +134,39 @@ fn run_loop(
                 }
                 Event::Mouse(mouse_event) => {
                     if app.modal.is_none() {
-                        if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
-                            let click_x = mouse_event.column;
-                            let click_y = mouse_event.row;
+                        let click_x = mouse_event.column;
+                        let click_y = mouse_event.row;
 
-                            // Sidebar is left 32 cols
-                            if click_x <= 32 {
-                                app.focused_pane = FocusedPane::Sidebar;
-                                let start_y = 4;
-                                let card_height = 4;
-                                if click_y >= start_y {
-                                    let clicked_idx = ((click_y - start_y) / card_height) as usize;
-                                    app.select_index(clicked_idx, workspace_h, workspace_w);
+                        // Sidebar is left 32 cols
+                        if click_x <= 32 {
+                            match mouse_event.kind {
+                                MouseEventKind::Down(MouseButton::Left) => {
+                                    app.focused_pane = FocusedPane::Sidebar;
+                                    let start_y = 4;
+                                    let card_height = 4;
+                                    if click_y >= start_y {
+                                        let clicked_card = ((click_y.saturating_sub(start_y)) / card_height) as usize;
+                                        let real_idx = clicked_card + app.scroll_offset;
+                                        app.select_index(real_idx, workspace_h, workspace_w);
+                                    }
                                 }
-                            } else {
-                                // Clicked on right workspace -> focus terminal
+                                MouseEventKind::ScrollUp => {
+                                    app.previous(workspace_h, workspace_w);
+                                }
+                                MouseEventKind::ScrollDown => {
+                                    app.next(workspace_h, workspace_w);
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            // Right workspace pane (Codex or OpenCode live terminal)
+                            if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
                                 if app.pty.is_running() {
                                     app.focused_pane = FocusedPane::Terminal;
                                 }
+                            }
+                            if app.pty.is_running() {
+                                forward_mouse_to_pty(&mut app.pty, mouse_event, 34, 4);
                             }
                         }
                     }
@@ -208,4 +223,35 @@ fn forward_key_to_pty(pty: &mut crate::tui::pty::PtySession, key: crossterm::eve
         _ => {}
     }
     Ok(())
+}
+
+
+fn forward_mouse_to_pty(
+    pty: &mut crate::tui::pty::PtySession,
+    mouse: crossterm::event::MouseEvent,
+    offset_x: u16,
+    offset_y: u16,
+) {
+    if mouse.column < offset_x || mouse.row < offset_y {
+        return;
+    }
+    let pty_col = mouse.column.saturating_sub(offset_x) + 1;
+    let pty_row = mouse.row.saturating_sub(offset_y) + 1;
+
+    let (btn, is_release) = match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => (0, false),
+        MouseEventKind::Down(MouseButton::Middle) => (1, false),
+        MouseEventKind::Down(MouseButton::Right) => (2, false),
+        MouseEventKind::Up(MouseButton::Left) => (0, true),
+        MouseEventKind::Up(MouseButton::Middle) => (1, true),
+        MouseEventKind::Up(MouseButton::Right) => (2, true),
+        MouseEventKind::Drag(MouseButton::Left) => (32, false),
+        MouseEventKind::ScrollUp => (64, false),
+        MouseEventKind::ScrollDown => (65, false),
+        _ => return,
+    };
+
+    let suffix = if is_release { 'm' } else { 'M' };
+    let seq = format!("[<{};{};{}{}", btn, pty_col, pty_row, suffix);
+    let _ = pty.write_input(seq.as_bytes());
 }
