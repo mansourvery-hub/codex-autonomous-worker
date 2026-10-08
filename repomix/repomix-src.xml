@@ -832,96 +832,7 @@ repomix.md</directory_structure><files>This section contains the contents of the
 232:             }
 233:         }
 234:     }
-235: }</file><file path="src/cli.rs"> 1: use clap::{Parser, Subcommand};
- 2: 
- 3: #[derive(Parser, Debug)]
- 4: #[command(name = &quot;autopilot&quot;)]
- 5: #[command(author = &quot;Autopilot Contributors&quot;)]
- 6: #[command(version = &quot;0.4.6&quot;)]
- 7: #[command(about = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;, long_about = None)]
- 8: pub struct Cli {
- 9:     #[command(subcommand)]
-10:     pub command: Option&lt;Commands&gt;,
-11: }
-12: 
-13: #[derive(Subcommand, Debug)]
-14: pub enum Commands {
-15:     /// Launch the split-screen TUI control deck
-16:     Tui,
-17: 
-18:     /// Launch a 24/7 autonomous continuous loop and open the control deck
-19:     Loop {
-20:         /// Campaign objective
-21:         #[arg(default_value = &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;)]
-22:         prompt: Vec&lt;String&gt;,
-23: 
-24:         /// Target repository name
-25:         #[arg(short, long, default_value = &quot;chess-repertoire-srs&quot;)]
-26:         repo: String,
-27: 
-28:         /// Agent engine (codex or opencode)
-29:         #[arg(short, long, default_value = &quot;codex&quot;)]
-30:         agent: String,
-31: 
-32:         /// Model override
-33:         #[arg(short, long)]
-34:         model: Option&lt;String&gt;,
-35: 
-36:         /// Iterations budget
-37:         #[arg(long, default_value_t = 30)]
-38:         iterations: u32,
-39:     },
-40: 
-41:     /// Queue a new autonomous engineering task
-42:     #[command(alias = &quot;task&quot;)]
-43:     Queue {
-44:         /// Campaign objective
-45:         prompt: Vec&lt;String&gt;,
-46: 
-47:         /// Target repository name
-48:         #[arg(short, long)]
-49:         repo: Option&lt;String&gt;,
-50: 
-51:         /// Agent engine (codex or opencode)
-52:         #[arg(short, long, default_value = &quot;codex&quot;)]
-53:         agent: String,
-54: 
-55:         /// Model override
-56:         #[arg(short, long)]
-57:         model: Option&lt;String&gt;,
-58: 
-59:         /// Iteration budget for continuous loop
-60:         #[arg(long, default_value_t = 20)]
-61:         iterations: u32,
-62:     },
-63: 
-64:     /// List active, queued, and completed tasks
-65:     List,
-66: 
-67:     /// Show currently running tasks details
-68:     Current,
-69: 
-70:     /// Show completed tasks history
-71:     History {
-72:         #[arg(short = &apos;n&apos;, long, default_value_t = 10)]
-73:         count: usize,
-74:     },
-75: 
-76:     /// View or follow logs
-77:     Logs {
-78:         #[arg(short, long)]
-79:         follow: bool,
-80: 
-81:         #[arg(short, long, default_value_t = 30)]
-82:         lines: usize,
-83: 
-84:         #[arg(long)]
-85:         last: bool,
-86:     },
-87: 
-88:     /// Run the 24/7 background supervisor daemon (used by systemd)
-89:     Daemon,
-90: }</file><file path="src/config.rs">  1: use std::path::PathBuf;
+235: }</file><file path="src/config.rs">  1: use std::path::PathBuf;
   2: use serde::{Deserialize, Serialize};
   3: 
   4: #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1298,7 +1209,110 @@ repomix.md</directory_structure><files>This section contains the contents of the
 178: 
 179: ## License
 180: 
-181: MIT</file><file path="src/campaign.rs">  1: use std::fs;
+181: MIT</file><file path="src/cli.rs">  1: use clap::{Parser, Subcommand};
+  2: 
+  3: #[derive(Parser, Debug)]
+  4: #[command(name = &quot;autopilot&quot;)]
+  5: #[command(author = &quot;Autopilot Contributors&quot;)]
+  6: #[command(version = &quot;0.4.6&quot;)]
+  7: #[command(about = &quot;24/7 Autonomous Engineering Daemon and Terminal Control Deck&quot;, long_about = None)]
+  8: pub struct Cli {
+  9:     #[command(subcommand)]
+ 10:     pub command: Option&lt;Commands&gt;,
+ 11: }
+ 12: 
+ 13: #[derive(Subcommand, Debug)]
+ 14: pub enum Commands {
+ 15:     /// Launch the split-screen TUI control deck
+ 16:     Tui,
+ 17: 
+ 18:     /// Launch a 24/7 autonomous continuous loop and open the control deck
+ 19:     Loop {
+ 20:         /// Campaign objective
+ 21:         #[arg(default_value = &quot;Audit domain logic, write reproduction tests first, fix edge cases, and execute PLAN.md iteratively&quot;)]
+ 22:         prompt: Vec&lt;String&gt;,
+ 23: 
+ 24:         /// Target repository name
+ 25:         #[arg(short, long, default_value = &quot;chess-repertoire-srs&quot;)]
+ 26:         repo: String,
+ 27: 
+ 28:         /// Agent engine (codex or opencode)
+ 29:         #[arg(short, long, default_value = &quot;codex&quot;)]
+ 30:         agent: String,
+ 31: 
+ 32:         /// Model override
+ 33:         #[arg(short, long)]
+ 34:         model: Option&lt;String&gt;,
+ 35: 
+ 36:         /// Iterations budget
+ 37:         #[arg(long, default_value_t = 30)]
+ 38:         iterations: u32,
+ 39:     },
+ 40: 
+ 41:     /// Queue a new autonomous engineering task
+ 42:     #[command(alias = &quot;task&quot;)]
+ 43:     Queue {
+ 44:         /// Campaign objective
+ 45:         prompt: Vec&lt;String&gt;,
+ 46: 
+ 47:         /// Target repository name
+ 48:         #[arg(short, long)]
+ 49:         repo: Option&lt;String&gt;,
+ 50: 
+ 51:         /// Agent engine (codex or opencode)
+ 52:         #[arg(short, long, default_value = &quot;codex&quot;)]
+ 53:         agent: String,
+ 54: 
+ 55:         /// Model override
+ 56:         #[arg(short, long)]
+ 57:         model: Option&lt;String&gt;,
+ 58: 
+ 59:         /// Iteration budget for continuous loop
+ 60:         #[arg(long, default_value_t = 20)]
+ 61:         iterations: u32,
+ 62:     },
+ 63: 
+ 64:     /// List active, queued, and completed tasks
+ 65:     List,
+ 66: 
+ 67:     /// Show currently running tasks details
+ 68:     Current,
+ 69: 
+ 70:     /// Show completed tasks history
+ 71:     History {
+ 72:         #[arg(short = &apos;n&apos;, long, default_value_t = 10)]
+ 73:         count: usize,
+ 74:     },
+ 75: 
+ 76:     /// View or follow logs
+ 77:     Logs {
+ 78:         #[arg(short, long)]
+ 79:         follow: bool,
+ 80: 
+ 81:         #[arg(short, long, default_value_t = 30)]
+ 82:         lines: usize,
+ 83: 
+ 84:         #[arg(long)]
+ 85:         last: bool,
+ 86:     },
+ 87: 
+ 88:     /// Archive completed or failed tasks to keep the active list clean
+ 89:     Archive {
+ 90:         /// Task ID to archive (e.g. 001)
+ 91:         task_id: Option&lt;String&gt;,
+ 92: 
+ 93:         /// Archive all completed and failed tasks
+ 94:         #[arg(long)]
+ 95:         all: bool,
+ 96: 
+ 97:         /// List archived tasks
+ 98:         #[arg(long)]
+ 99:         list: bool,
+100:     },
+101: 
+102:     /// Run the 24/7 background supervisor daemon (used by systemd)
+103:     Daemon,
+104: }</file><file path="src/campaign.rs">  1: use std::fs;
   2: use std::path::{Path, PathBuf};
   3: use std::time::SystemTime;
   4: use anyhow::{Context, Result};
@@ -1698,12 +1712,112 @@ repomix.md</directory_structure><files>This section contains the contents of the
 398:     fs::write(&amp;file_path, yaml_str).context(&quot;Failed to write campaign file&quot;)?;
 399: 
 400:     Ok(next_id)
-401: }</file><file path="src/main.rs">  1: use std::process::Command;
+401: }
+402: 
+403: pub fn archive_task(config: &amp;AppConfig, task_id: &amp;str) -&gt; Result&lt;Option&lt;PathBuf&gt;&gt; {
+404:     let tasks_dir = config.tasks_dir();
+405:     let archive_dir = tasks_dir.join(&quot;archive&quot;);
+406:     fs::create_dir_all(&amp;archive_dir)?;
+407: 
+408:     let entries = fs::read_dir(&amp;tasks_dir)?;
+409:     for entry in entries.flatten() {
+410:         let path = entry.path();
+411:         if !path.is_file() {
+412:             continue;
+413:         }
+414:         let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+415:         let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+416:         let id = stem.split(&apos;.&apos;).next().unwrap_or(&quot;&quot;).split(&apos;-&apos;).next().unwrap_or(&quot;&quot;);
+417:         if id == task_id {
+418:             let dest = archive_dir.join(&amp;fname);
+419:             fs::rename(&amp;path, &amp;dest)?;
+420: 
+421:             let state_file = config.state_dir().join(format!(&quot;task-{}.json&quot;, task_id));
+422:             let _ = fs::remove_file(state_file);
+423:             let worktree_dir = config.worktrees_dir().join(format!(&quot;task-{}&quot;, task_id));
+424:             let _ = fs::remove_dir_all(&amp;worktree_dir);
+425: 
+426:             return Ok(Some(dest));
+427:         }
+428:     }
+429:     Ok(None)
+430: }
+431: 
+432: pub fn archive_all_completed(config: &amp;AppConfig) -&gt; Result&lt;usize&gt; {
+433:     let tasks_dir = config.tasks_dir();
+434:     let archive_dir = tasks_dir.join(&quot;archive&quot;);
+435:     fs::create_dir_all(&amp;archive_dir)?;
+436: 
+437:     let mut count = 0;
+438:     let entries = fs::read_dir(&amp;tasks_dir)?;
+439:     for entry in entries.flatten() {
+440:         let path = entry.path();
+441:         if !path.is_file() {
+442:             continue;
+443:         }
+444:         let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+445:         let is_done = fname.contains(&quot;.done.&quot;) || fname.ends_with(&quot;.done.yaml&quot;) || fname.ends_with(&quot;.done.json&quot;);
+446:         let is_failed = fname.contains(&quot;.failed.&quot;) || fname.ends_with(&quot;.failed.yaml&quot;) || fname.ends_with(&quot;.failed.json&quot;);
+447:         if is_done || is_failed {
+448:             let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+449:             let task_id = stem.split(&apos;.&apos;).next().unwrap_or(&quot;&quot;).split(&apos;-&apos;).next().unwrap_or(&quot;&quot;);
+450: 
+451:             let dest = archive_dir.join(&amp;fname);
+452:             fs::rename(&amp;path, &amp;dest)?;
+453: 
+454:             let state_file = config.state_dir().join(format!(&quot;task-{}.json&quot;, task_id));
+455:             let _ = fs::remove_file(state_file);
+456:             let worktree_dir = config.worktrees_dir().join(format!(&quot;task-{}&quot;, task_id));
+457:             let _ = fs::remove_dir_all(&amp;worktree_dir);
+458: 
+459:             count += 1;
+460:         }
+461:     }
+462:     Ok(count)
+463: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
+ 2: 
+ 3: ## Project Structure &amp; Module Organization
+ 4: 
+ 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
+ 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
+ 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
+ 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
+ 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
+10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
+11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
+12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
+13: 
+14: ## Build, Test, and Development Commands
+15: 
+16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
+17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
+18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
+19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
+21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
+22: - `autopilot current`: Shows details for the currently active campaign.
+23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
+24: 
+25: ## Coding Style &amp; Naming Conventions
+26: 
+27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
+28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
+29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
+30: 
+31: ## Testing Guidelines
+32: 
+33: - **Validation**: Run `cargo test --all` before submitting any change.
+34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
+35: 
+36: ## Commit &amp; Pull Request Guidelines
+37: 
+38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
+39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/main.rs">  1: use std::process::Command;
   2: use anyhow::Result;
   3: use clap::Parser;
   4: use autopilot::cli::{Cli, Commands};
   5: use autopilot::config::AppConfig;
-  6: use autopilot::campaign::{load_all_campaigns, queue_campaign, CampaignStatus};
+  6: use autopilot::campaign::{archive_all_completed, archive_task, load_all_campaigns, queue_campaign, CampaignStatus};
   7: use autopilot::supervisor::Supervisor;
   8: use autopilot::tui::run_tui;
   9: 
@@ -1837,52 +1951,46 @@ repomix.md</directory_structure><files>This section contains the contents of the
 137:                 println!(&quot;No logs found.&quot;);
 138:             }
 139:         }
-140:         Some(Commands::Daemon) =&gt; {
-141:             let supervisor = std::sync::Arc::new(Supervisor::new(config));
-142:             supervisor.run_daemon().await?;
-143:         }
-144:     }
-145: 
-146:     Ok(())
-147: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
- 2: 
- 3: ## Project Structure &amp; Module Organization
- 4: 
- 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
- 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
- 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
- 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
- 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
-10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
-11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
-12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
-13: 
-14: ## Build, Test, and Development Commands
-15: 
-16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
-17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
-18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
-19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
-20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
-21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
-22: - `autopilot current`: Shows details for the currently active campaign.
-23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
-24: 
-25: ## Coding Style &amp; Naming Conventions
-26: 
-27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
-28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
-29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
-30: 
-31: ## Testing Guidelines
-32: 
-33: - **Validation**: Run `cargo test --all` before submitting any change.
-34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
-35: 
-36: ## Commit &amp; Pull Request Guidelines
-37: 
-38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
-39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/supervisor.rs">  1: use std::collections::HashSet;
+140:         Some(Commands::Archive { task_id, all, list }) =&gt; {
+141:             if list {
+142:                 let archive_dir = config.tasks_dir().join(&quot;archive&quot;);
+143:                 if archive_dir.exists() {
+144:                     let mut files = Vec::new();
+145:                     if let Ok(entries) = std::fs::read_dir(&amp;archive_dir) {
+146:                         for e in entries.flatten() {
+147:                             if e.path().is_file() {
+148:                                 files.push(e.file_name().to_string_lossy().to_string());
+149:                             }
+150:                         }
+151:                     }
+152:                     files.sort();
+153:                     println!(&quot;[1m=== Archived Tasks ({}) ===[0m&quot;, files.len());
+154:                     for f in files {
+155:                         println!(&quot;  {}&quot;, f);
+156:                     }
+157:                 } else {
+158:                     println!(&quot;No archived tasks found.&quot;);
+159:                 }
+160:             } else if all {
+161:                 let count = archive_all_completed(&amp;config)?;
+162:                 println!(&quot;[32m✔ Successfully archived {} completed/failed tasks to tasks/archive/.[0m&quot;, count);
+163:             } else if let Some(id) = task_id {
+164:                 match archive_task(&amp;config, &amp;id)? {
+165:                     Some(p) =&gt; println!(&quot;[32m✔ Successfully archived task #{} to {:?}.[0m&quot;, id, p),
+166:                     None =&gt; println!(&quot;Task #{} not found.&quot;, id),
+167:                 }
+168:             } else {
+169:                 println!(&quot;Usage: autopilot archive &lt;TASK_ID&gt; | --all | --list&quot;);
+170:             }
+171:         }
+172:         Some(Commands::Daemon) =&gt; {
+173:             let supervisor = std::sync::Arc::new(Supervisor::new(config));
+174:             supervisor.run_daemon().await?;
+175:         }
+176:     }
+177: 
+178:     Ok(())
+179: }</file><file path="src/supervisor.rs">  1: use std::collections::HashSet;
   2: use std::fs;
   3: use std::path::{Path, PathBuf};
   4: use std::process::Command;
@@ -2775,330 +2883,357 @@ repomix.md</directory_structure><files>This section contains the contents of the
 305:         self.modal = None;
 306:     }
 307: 
-308:     pub fn cancel_selected_campaign(&amp;mut self, term_h: u16, term_w: u16) {
-309:         let campaign = match self.selected_campaign() {
-310:             Some(c) =&gt; c.clone(),
+308:     pub fn archive_selected_task(&amp;mut self, term_h: u16, term_w: u16) {
+309:         let task = match self.selected_campaign() {
+310:             Some(t) =&gt; t.clone(),
 311:             None =&gt; return,
 312:         };
 313: 
-314:         if campaign.status != CampaignStatus::Running &amp;&amp; campaign.status != CampaignStatus::Claimed {
-315:             self.set_message(format!(&quot;Task #{} is not currently running.&quot;, campaign.id));
+314:         if task.status == CampaignStatus::Running || task.status == CampaignStatus::Claimed {
+315:             self.set_message(format!(&quot;Cannot archive active task #{}. Stop it first with [x].&quot;, task.id));
 316:             return;
 317:         }
 318: 
-319:         let _ = crate::campaign::cancel_campaign_by_id(&amp;self.config, &amp;campaign.id);
-320: 
-321:         self.set_message(format!(&quot;Stopped task #{}. Parallel slot freed.&quot;, campaign.id));
-322:         self.pty.kill();
-323:         self.refresh();
-324:         self.sync_pty_with_selection(term_h, term_w);
-325:     }
-326: 
-327:     pub fn sync_pty_with_selection(&amp;mut self, term_rows: u16, term_cols: u16) {
-328:         let campaign = match self.selected_campaign() {
-329:             Some(c) =&gt; c.clone(),
-330:             None =&gt; {
-331:                 self.pty.kill();
-332:                 return;
-333:             }
-334:         };
-335: 
-336:         if self.pty.active_task_id.as_deref() == Some(&amp;campaign.id) &amp;&amp; self.pty.is_running() {
-337:             return;
-338:         }
-339: 
-340:         let repo_dir = {
-341:             let cand = std::path::PathBuf::from(format!(&quot;/home/ubuntu/github-projects/{}&quot;, campaign.repo));
-342:             if cand.exists() {
-343:                 cand
-344:             } else {
-345:                 self.config.repos_dir().join(&amp;campaign.repo)
-346:             }
-347:         };
-348: 
-349:         if campaign.status == CampaignStatus::Running || campaign.status == CampaignStatus::Claimed {
-350:             let task_session = format!(&quot;autopilot-{}&quot;, campaign.id);
-351:             // Check if per-task session exists, else fallback to codex-live
-352:             let has_task_sess = std::process::Command::new(&quot;tmux&quot;)
-353:                 .args([&quot;has-session&quot;, &quot;-t&quot;, &amp;task_session])
-354:                 .output()
-355:                 .map(|o| o.status.success())
-356:                 .unwrap_or(false);
-357: 
-358:             let attach_target = if has_task_sess { task_session } else { &quot;codex-live&quot;.to_string() };
-359: 
-360:             let _ = self.pty.spawn(
-361:                 campaign.id.clone(),
-362:                 &quot;tmux&quot;,
-363:                 &amp;[&quot;attach&quot;, &quot;-t&quot;, &amp;attach_target],
-364:                 &amp;repo_dir,
-365:                 term_rows,
-366:                 term_cols,
-367:             );
-368:         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
-369:             if campaign.agent == &quot;opencode&quot; {
-370:                 let _ = self.pty.spawn(
-371:                     campaign.id.clone(),
-372:                     &quot;opencode&quot;,
-373:                     &amp;[&quot;--auto&quot;, &quot;--continue&quot;, &amp;repo_dir.to_string_lossy()],
-374:                     &amp;repo_dir,
-375:                     term_rows,
-376:                     term_cols,
-377:                 );
-378:             } else if let Some(session_id) = find_session_for_campaign(&amp;campaign.id) {
-379:                 let model_flag = format!(&quot;model={}&quot;, campaign.model);
-380:                 let _ = self.pty.spawn(
-381:                     campaign.id.clone(),
-382:                     &quot;codex&quot;,
-383:                     &amp;[
-384:                         &quot;resume&quot;,
-385:                         &amp;session_id,
-386:                         &quot;-C&quot;,
-387:                         &amp;repo_dir.to_string_lossy(),
-388:                         &quot;-c&quot;,
-389:                         &quot;openai_base_url=http://127.0.0.1:8317/v1&quot;,
-390:                         &quot;-c&quot;,
-391:                         &quot;model_catalog_json=/home/ubuntu/.codex/model-catalogs/gateway.json&quot;,
-392:                         &quot;-c&quot;,
-393:                         &amp;model_flag,
-394:                         &quot;--dangerously-bypass-approvals-and-sandbox&quot;,
-395:                     ],
-396:                     &amp;repo_dir,
-397:                     term_rows,
-398:                     term_cols,
-399:                 );
-400:             } else {
-401:                 self.pty.kill();
-402:             }
-403:         } else {
-404:             self.pty.kill();
-405:         }
-406:     }
-407: 
-408:     pub fn handle_modal_key(&amp;mut self, key: KeyEvent, term_h: u16, term_w: u16) -&gt; bool {
-409:         let mut should_queue = false;
-410:         if let Some(ref mut modal) = self.modal {
-411:             match modal.step {
-412:                 ModalStep::SelectRepo =&gt; match key.code {
-413:                     KeyCode::Esc =&gt; {
-414:                         self.modal = None;
-415:                     }
-416:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
-417:                         if modal.selected_repo_idx &gt; 0 {
-418:                             modal.selected_repo_idx -= 1;
-419:                         } else {
-420:                             modal.selected_repo_idx = modal.repos.len().saturating_sub(1);
-421:                         }
-422:                     }
-423:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
-424:                         if !modal.repos.is_empty() {
-425:                             modal.selected_repo_idx = (modal.selected_repo_idx + 1) % modal.repos.len();
-426:                         }
-427:                     }
-428:                     KeyCode::Enter =&gt; {
-429:                         modal.step = ModalStep::SelectEngine;
-430:                     }
-431:                     _ =&gt; {}
-432:                 },
-433:                 ModalStep::SelectEngine =&gt; match key.code {
-434:                     KeyCode::Esc =&gt; {
-435:                         self.modal = None;
-436:                     }
-437:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
-438:                         if modal.selected_engine_idx &gt; 0 {
-439:                             modal.selected_engine_idx -= 1;
-440:                         } else {
-441:                             modal.selected_engine_idx = modal.engines.len().saturating_sub(1);
-442:                         }
-443:                     }
-444:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
-445:                         if !modal.engines.is_empty() {
-446:                             modal.selected_engine_idx = (modal.selected_engine_idx + 1) % modal.engines.len();
-447:                         }
-448:                     }
-449:                     KeyCode::Enter =&gt; {
-450:                         // Dynamically load models for the chosen engine
-451:                         modal.load_dynamic_models();
-452:                         modal.step = ModalStep::SelectModel;
-453:                     }
-454:                     _ =&gt; {}
-455:                 },
-456:                 ModalStep::SelectModel =&gt; {
-457:                     let total = modal.filtered_models().len();
-458:                     match key.code {
-459:                         KeyCode::Esc =&gt; {
-460:                             if !modal.model_filter.is_empty() {
-461:                                 modal.model_filter.clear();
-462:                                 modal.selected_model_idx = 0;
-463:                             } else {
-464:                                 self.modal = None;
-465:                             }
-466:                         }
-467:                         KeyCode::Up =&gt; {
-468:                             if modal.selected_model_idx &gt; 0 {
-469:                                 modal.selected_model_idx -= 1;
-470:                             } else if total &gt; 0 {
-471:                                 modal.selected_model_idx = total - 1;
-472:                             }
-473:                         }
-474:                         KeyCode::Down =&gt; {
-475:                             if total &gt; 0 {
-476:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
-477:                             }
-478:                         }
-479:                         KeyCode::PageUp =&gt; {
-480:                             modal.selected_model_idx = modal.selected_model_idx.saturating_sub(10);
-481:                         }
-482:                         KeyCode::PageDown =&gt; {
-483:                             if total &gt; 0 {
-484:                                 modal.selected_model_idx = (modal.selected_model_idx + 10).min(total - 1);
-485:                             }
-486:                         }
-487:                         KeyCode::Home =&gt; {
-488:                             modal.selected_model_idx = 0;
-489:                         }
-490:                         KeyCode::End =&gt; {
-491:                             if total &gt; 0 {
-492:                                 modal.selected_model_idx = total - 1;
-493:                             }
-494:                         }
-495:                         KeyCode::Char(&apos;k&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
-496:                             if modal.selected_model_idx &gt; 0 {
-497:                                 modal.selected_model_idx -= 1;
-498:                             } else if total &gt; 0 {
-499:                                 modal.selected_model_idx = total - 1;
-500:                             }
-501:                         }
-502:                         KeyCode::Char(&apos;j&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
-503:                             if total &gt; 0 {
-504:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
-505:                             }
-506:                         }
-507:                         KeyCode::Char(&apos;u&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
-508:                             modal.model_filter.clear();
-509:                             modal.selected_model_idx = 0;
-510:                         }
-511:                         KeyCode::Char(c) =&gt; {
-512:                             modal.model_filter.push(c);
-513:                             modal.selected_model_idx = 0;
-514:                         }
-515:                         KeyCode::Backspace =&gt; {
-516:                             modal.model_filter.pop();
-517:                             modal.selected_model_idx = 0;
-518:                         }
-519:                         KeyCode::Enter =&gt; {
-520:                             if total &gt; 0 {
-521:                                 modal.step = ModalStep::SelectMode;
-522:                             }
-523:                         }
-524:                         _ =&gt; {}
-525:                     }
-526:                 }
-527:                 ModalStep::SelectMode =&gt; match key.code {
-528:                     KeyCode::Esc =&gt; {
-529:                         self.modal = None;
-530:                     }
-531:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
-532:                         if modal.selected_mode_idx &gt; 0 {
-533:                             modal.selected_mode_idx -= 1;
-534:                         } else {
-535:                             modal.selected_mode_idx = modal.modes.len().saturating_sub(1);
-536:                         }
-537:                     }
-538:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
-539:                         if !modal.modes.is_empty() {
-540:                             modal.selected_mode_idx = (modal.selected_mode_idx + 1) % modal.modes.len();
+319:         match crate::campaign::archive_task(&amp;self.config, &amp;task.id) {
+320:             Ok(Some(_)) =&gt; {
+321:                 self.set_message(format!(&quot;Archived task #{}.&quot;, task.id));
+322:                 self.pty.kill();
+323:                 self.refresh();
+324:                 self.sync_pty_with_selection(term_h, term_w);
+325:             }
+326:             Ok(None) =&gt; {
+327:                 self.set_message(format!(&quot;Task #{} not found.&quot;, task.id));
+328:             }
+329:             Err(e) =&gt; {
+330:                 self.set_message(format!(&quot;Error archiving task #{}: {}&quot;, task.id, e));
+331:             }
+332:         }
+333:     }
+334: 
+335:     pub fn cancel_selected_campaign(&amp;mut self, term_h: u16, term_w: u16) {
+336:         let campaign = match self.selected_campaign() {
+337:             Some(c) =&gt; c.clone(),
+338:             None =&gt; return,
+339:         };
+340: 
+341:         if campaign.status != CampaignStatus::Running &amp;&amp; campaign.status != CampaignStatus::Claimed {
+342:             self.set_message(format!(&quot;Task #{} is not currently running.&quot;, campaign.id));
+343:             return;
+344:         }
+345: 
+346:         let _ = crate::campaign::cancel_campaign_by_id(&amp;self.config, &amp;campaign.id);
+347: 
+348:         self.set_message(format!(&quot;Stopped task #{}. Parallel slot freed.&quot;, campaign.id));
+349:         self.pty.kill();
+350:         self.refresh();
+351:         self.sync_pty_with_selection(term_h, term_w);
+352:     }
+353: 
+354:     pub fn sync_pty_with_selection(&amp;mut self, term_rows: u16, term_cols: u16) {
+355:         let campaign = match self.selected_campaign() {
+356:             Some(c) =&gt; c.clone(),
+357:             None =&gt; {
+358:                 self.pty.kill();
+359:                 return;
+360:             }
+361:         };
+362: 
+363:         if self.pty.active_task_id.as_deref() == Some(&amp;campaign.id) &amp;&amp; self.pty.is_running() {
+364:             return;
+365:         }
+366: 
+367:         let repo_dir = {
+368:             let cand = std::path::PathBuf::from(format!(&quot;/home/ubuntu/github-projects/{}&quot;, campaign.repo));
+369:             if cand.exists() {
+370:                 cand
+371:             } else {
+372:                 self.config.repos_dir().join(&amp;campaign.repo)
+373:             }
+374:         };
+375: 
+376:         if campaign.status == CampaignStatus::Running || campaign.status == CampaignStatus::Claimed {
+377:             let task_session = format!(&quot;autopilot-{}&quot;, campaign.id);
+378:             // Check if per-task session exists, else fallback to codex-live
+379:             let has_task_sess = std::process::Command::new(&quot;tmux&quot;)
+380:                 .args([&quot;has-session&quot;, &quot;-t&quot;, &amp;task_session])
+381:                 .output()
+382:                 .map(|o| o.status.success())
+383:                 .unwrap_or(false);
+384: 
+385:             let attach_target = if has_task_sess { task_session } else { &quot;codex-live&quot;.to_string() };
+386: 
+387:             let _ = self.pty.spawn(
+388:                 campaign.id.clone(),
+389:                 &quot;tmux&quot;,
+390:                 &amp;[&quot;attach&quot;, &quot;-t&quot;, &amp;attach_target],
+391:                 &amp;repo_dir,
+392:                 term_rows,
+393:                 term_cols,
+394:             );
+395:         } else if campaign.status == CampaignStatus::Done || campaign.status == CampaignStatus::Failed {
+396:             if campaign.agent == &quot;opencode&quot; {
+397:                 let _ = self.pty.spawn(
+398:                     campaign.id.clone(),
+399:                     &quot;opencode&quot;,
+400:                     &amp;[&quot;--auto&quot;, &quot;--continue&quot;, &amp;repo_dir.to_string_lossy()],
+401:                     &amp;repo_dir,
+402:                     term_rows,
+403:                     term_cols,
+404:                 );
+405:             } else if let Some(session_id) = find_session_for_campaign(&amp;campaign.id) {
+406:                 let model_flag = format!(&quot;model={}&quot;, campaign.model);
+407:                 let _ = self.pty.spawn(
+408:                     campaign.id.clone(),
+409:                     &quot;codex&quot;,
+410:                     &amp;[
+411:                         &quot;resume&quot;,
+412:                         &amp;session_id,
+413:                         &quot;-C&quot;,
+414:                         &amp;repo_dir.to_string_lossy(),
+415:                         &quot;-c&quot;,
+416:                         &quot;openai_base_url=http://127.0.0.1:8317/v1&quot;,
+417:                         &quot;-c&quot;,
+418:                         &quot;model_catalog_json=/home/ubuntu/.codex/model-catalogs/gateway.json&quot;,
+419:                         &quot;-c&quot;,
+420:                         &amp;model_flag,
+421:                         &quot;--dangerously-bypass-approvals-and-sandbox&quot;,
+422:                     ],
+423:                     &amp;repo_dir,
+424:                     term_rows,
+425:                     term_cols,
+426:                 );
+427:             } else {
+428:                 self.pty.kill();
+429:             }
+430:         } else {
+431:             self.pty.kill();
+432:         }
+433:     }
+434: 
+435:     pub fn handle_modal_key(&amp;mut self, key: KeyEvent, term_h: u16, term_w: u16) -&gt; bool {
+436:         let mut should_queue = false;
+437:         if let Some(ref mut modal) = self.modal {
+438:             match modal.step {
+439:                 ModalStep::SelectRepo =&gt; match key.code {
+440:                     KeyCode::Esc =&gt; {
+441:                         self.modal = None;
+442:                     }
+443:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+444:                         if modal.selected_repo_idx &gt; 0 {
+445:                             modal.selected_repo_idx -= 1;
+446:                         } else {
+447:                             modal.selected_repo_idx = modal.repos.len().saturating_sub(1);
+448:                         }
+449:                     }
+450:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+451:                         if !modal.repos.is_empty() {
+452:                             modal.selected_repo_idx = (modal.selected_repo_idx + 1) % modal.repos.len();
+453:                         }
+454:                     }
+455:                     KeyCode::Enter =&gt; {
+456:                         modal.step = ModalStep::SelectEngine;
+457:                     }
+458:                     _ =&gt; {}
+459:                 },
+460:                 ModalStep::SelectEngine =&gt; match key.code {
+461:                     KeyCode::Esc =&gt; {
+462:                         self.modal = None;
+463:                     }
+464:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+465:                         if modal.selected_engine_idx &gt; 0 {
+466:                             modal.selected_engine_idx -= 1;
+467:                         } else {
+468:                             modal.selected_engine_idx = modal.engines.len().saturating_sub(1);
+469:                         }
+470:                     }
+471:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+472:                         if !modal.engines.is_empty() {
+473:                             modal.selected_engine_idx = (modal.selected_engine_idx + 1) % modal.engines.len();
+474:                         }
+475:                     }
+476:                     KeyCode::Enter =&gt; {
+477:                         // Dynamically load models for the chosen engine
+478:                         modal.load_dynamic_models();
+479:                         modal.step = ModalStep::SelectModel;
+480:                     }
+481:                     _ =&gt; {}
+482:                 },
+483:                 ModalStep::SelectModel =&gt; {
+484:                     let total = modal.filtered_models().len();
+485:                     match key.code {
+486:                         KeyCode::Esc =&gt; {
+487:                             if !modal.model_filter.is_empty() {
+488:                                 modal.model_filter.clear();
+489:                                 modal.selected_model_idx = 0;
+490:                             } else {
+491:                                 self.modal = None;
+492:                             }
+493:                         }
+494:                         KeyCode::Up =&gt; {
+495:                             if modal.selected_model_idx &gt; 0 {
+496:                                 modal.selected_model_idx -= 1;
+497:                             } else if total &gt; 0 {
+498:                                 modal.selected_model_idx = total - 1;
+499:                             }
+500:                         }
+501:                         KeyCode::Down =&gt; {
+502:                             if total &gt; 0 {
+503:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+504:                             }
+505:                         }
+506:                         KeyCode::PageUp =&gt; {
+507:                             modal.selected_model_idx = modal.selected_model_idx.saturating_sub(10);
+508:                         }
+509:                         KeyCode::PageDown =&gt; {
+510:                             if total &gt; 0 {
+511:                                 modal.selected_model_idx = (modal.selected_model_idx + 10).min(total - 1);
+512:                             }
+513:                         }
+514:                         KeyCode::Home =&gt; {
+515:                             modal.selected_model_idx = 0;
+516:                         }
+517:                         KeyCode::End =&gt; {
+518:                             if total &gt; 0 {
+519:                                 modal.selected_model_idx = total - 1;
+520:                             }
+521:                         }
+522:                         KeyCode::Char(&apos;k&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+523:                             if modal.selected_model_idx &gt; 0 {
+524:                                 modal.selected_model_idx -= 1;
+525:                             } else if total &gt; 0 {
+526:                                 modal.selected_model_idx = total - 1;
+527:                             }
+528:                         }
+529:                         KeyCode::Char(&apos;j&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+530:                             if total &gt; 0 {
+531:                                 modal.selected_model_idx = (modal.selected_model_idx + 1) % total;
+532:                             }
+533:                         }
+534:                         KeyCode::Char(&apos;u&apos;) if key.modifiers.contains(KeyModifiers::CONTROL) =&gt; {
+535:                             modal.model_filter.clear();
+536:                             modal.selected_model_idx = 0;
+537:                         }
+538:                         KeyCode::Char(c) =&gt; {
+539:                             modal.model_filter.push(c);
+540:                             modal.selected_model_idx = 0;
 541:                         }
-542:                     }
-543:                     KeyCode::Enter =&gt; {
-544:                         if modal.selected_mode().id == &quot;single&quot; {
-545:                             modal.prompt_buffer = &quot;Inspect codebase and resolve open issue&quot;.to_string();
-546:                             modal.cursor_pos = modal.prompt_buffer.len();
-547:                         }
-548:                         modal.step = ModalStep::EnterPrompt;
-549:                     }
-550:                     _ =&gt; {}
-551:                 },
-552:                 ModalStep::EnterPrompt =&gt; match key.code {
-553:                     KeyCode::Esc =&gt; {
-554:                         self.modal = None;
-555:                     }
-556:                     KeyCode::Enter =&gt; {
-557:                         should_queue = true;
-558:                     }
-559:                     KeyCode::Backspace =&gt; {
-560:                         if modal.cursor_pos &gt; 0 &amp;&amp; modal.cursor_pos &lt;= modal.prompt_buffer.len() {
-561:                             modal.prompt_buffer.remove(modal.cursor_pos - 1);
-562:                             modal.cursor_pos -= 1;
+542:                         KeyCode::Backspace =&gt; {
+543:                             modal.model_filter.pop();
+544:                             modal.selected_model_idx = 0;
+545:                         }
+546:                         KeyCode::Enter =&gt; {
+547:                             if total &gt; 0 {
+548:                                 modal.step = ModalStep::SelectMode;
+549:                             }
+550:                         }
+551:                         _ =&gt; {}
+552:                     }
+553:                 }
+554:                 ModalStep::SelectMode =&gt; match key.code {
+555:                     KeyCode::Esc =&gt; {
+556:                         self.modal = None;
+557:                     }
+558:                     KeyCode::Up | KeyCode::Char(&apos;k&apos;) =&gt; {
+559:                         if modal.selected_mode_idx &gt; 0 {
+560:                             modal.selected_mode_idx -= 1;
+561:                         } else {
+562:                             modal.selected_mode_idx = modal.modes.len().saturating_sub(1);
 563:                         }
 564:                     }
-565:                     KeyCode::Delete =&gt; {
-566:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
-567:                             modal.prompt_buffer.remove(modal.cursor_pos);
+565:                     KeyCode::Down | KeyCode::Char(&apos;j&apos;) =&gt; {
+566:                         if !modal.modes.is_empty() {
+567:                             modal.selected_mode_idx = (modal.selected_mode_idx + 1) % modal.modes.len();
 568:                         }
 569:                     }
-570:                     KeyCode::Left =&gt; {
-571:                         if modal.cursor_pos &gt; 0 {
-572:                             modal.cursor_pos -= 1;
-573:                         }
-574:                     }
-575:                     KeyCode::Right =&gt; {
-576:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
-577:                             modal.cursor_pos += 1;
-578:                         }
-579:                     }
-580:                     KeyCode::Char(c) =&gt; {
-581:                         if !key.modifiers.contains(KeyModifiers::CONTROL) &amp;&amp; !key.modifiers.contains(KeyModifiers::ALT) {
-582:                             modal.prompt_buffer.insert(modal.cursor_pos, c);
-583:                             modal.cursor_pos += 1;
-584:                         }
+570:                     KeyCode::Enter =&gt; {
+571:                         if modal.selected_mode().id == &quot;single&quot; {
+572:                             modal.prompt_buffer = &quot;Inspect codebase and resolve open issue&quot;.to_string();
+573:                             modal.cursor_pos = modal.prompt_buffer.len();
+574:                         }
+575:                         modal.step = ModalStep::EnterPrompt;
+576:                     }
+577:                     _ =&gt; {}
+578:                 },
+579:                 ModalStep::EnterPrompt =&gt; match key.code {
+580:                     KeyCode::Esc =&gt; {
+581:                         self.modal = None;
+582:                     }
+583:                     KeyCode::Enter =&gt; {
+584:                         should_queue = true;
 585:                     }
-586:                     _ =&gt; {}
-587:                 },
-588:             }
-589:         }
-590: 
-591:         if should_queue {
-592:             if let Some(modal) = self.modal.take() {
-593:                 let repo = modal.selected_repo().to_string();
-594:                 let engine_opt = modal.selected_engine();
-595:                 let mode_opt = modal.selected_mode();
-596:                 let model_str = modal.selected_model().map(|m| m.id.as_str());
-597:                 let prompt = modal.prompt_buffer.trim().to_string();
-598: 
-599:                 if !prompt.is_empty() {
-600:                     match queue_campaign(
-601:                         &amp;self.config,
-602:                         &amp;repo,
-603:                         &amp;prompt,
-604:                         mode_opt.id,
-605:                         mode_opt.iterations,
-606:                         model_str,
-607:                         Some(engine_opt.id),
-608:                     ) {
-609:                         Ok(id) =&gt; {
-610:                             self.set_message(format!(
-611:                                 &quot;{} #{} queued with {} on {}! (Starting in parallel slot)&quot;,
-612:                                 if mode_opt.id == &quot;continuous&quot; { &quot;24/7 Loop&quot; } else { &quot;Task&quot; },
-613:                                 id,
-614:                                 engine_opt.label.split(&apos;(&apos;).next().unwrap_or(engine_opt.id).trim(),
-615:                                 repo
-616:                             ));
-617:                             self.refresh();
-618:                             self.selected_index = 0;
-619:                             self.sync_pty_with_selection(term_h, term_w);
-620:                         }
-621:                         Err(e) =&gt; {
-622:                             self.set_message(format!(&quot;Error queueing campaign: {}&quot;, e));
-623:                         }
-624:                     }
-625:                 }
-626:             }
-627:         }
-628: 
-629:         false
-630:     }
-631: }</file><file path="src/tui/mod.rs">  1: pub mod app;
+586:                     KeyCode::Backspace =&gt; {
+587:                         if modal.cursor_pos &gt; 0 &amp;&amp; modal.cursor_pos &lt;= modal.prompt_buffer.len() {
+588:                             modal.prompt_buffer.remove(modal.cursor_pos - 1);
+589:                             modal.cursor_pos -= 1;
+590:                         }
+591:                     }
+592:                     KeyCode::Delete =&gt; {
+593:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
+594:                             modal.prompt_buffer.remove(modal.cursor_pos);
+595:                         }
+596:                     }
+597:                     KeyCode::Left =&gt; {
+598:                         if modal.cursor_pos &gt; 0 {
+599:                             modal.cursor_pos -= 1;
+600:                         }
+601:                     }
+602:                     KeyCode::Right =&gt; {
+603:                         if modal.cursor_pos &lt; modal.prompt_buffer.len() {
+604:                             modal.cursor_pos += 1;
+605:                         }
+606:                     }
+607:                     KeyCode::Char(c) =&gt; {
+608:                         if !key.modifiers.contains(KeyModifiers::CONTROL) &amp;&amp; !key.modifiers.contains(KeyModifiers::ALT) {
+609:                             modal.prompt_buffer.insert(modal.cursor_pos, c);
+610:                             modal.cursor_pos += 1;
+611:                         }
+612:                     }
+613:                     _ =&gt; {}
+614:                 },
+615:             }
+616:         }
+617: 
+618:         if should_queue {
+619:             if let Some(modal) = self.modal.take() {
+620:                 let repo = modal.selected_repo().to_string();
+621:                 let engine_opt = modal.selected_engine();
+622:                 let mode_opt = modal.selected_mode();
+623:                 let model_str = modal.selected_model().map(|m| m.id.as_str());
+624:                 let prompt = modal.prompt_buffer.trim().to_string();
+625: 
+626:                 if !prompt.is_empty() {
+627:                     match queue_campaign(
+628:                         &amp;self.config,
+629:                         &amp;repo,
+630:                         &amp;prompt,
+631:                         mode_opt.id,
+632:                         mode_opt.iterations,
+633:                         model_str,
+634:                         Some(engine_opt.id),
+635:                     ) {
+636:                         Ok(id) =&gt; {
+637:                             self.set_message(format!(
+638:                                 &quot;{} #{} queued with {} on {}! (Starting in parallel slot)&quot;,
+639:                                 if mode_opt.id == &quot;continuous&quot; { &quot;24/7 Loop&quot; } else { &quot;Task&quot; },
+640:                                 id,
+641:                                 engine_opt.label.split(&apos;(&apos;).next().unwrap_or(engine_opt.id).trim(),
+642:                                 repo
+643:                             ));
+644:                             self.refresh();
+645:                             self.selected_index = 0;
+646:                             self.sync_pty_with_selection(term_h, term_w);
+647:                         }
+648:                         Err(e) =&gt; {
+649:                             self.set_message(format!(&quot;Error queueing campaign: {}&quot;, e));
+650:                         }
+651:                     }
+652:                 }
+653:             }
+654:         }
+655: 
+656:         false
+657:     }
+658: }</file><file path="src/tui/mod.rs">  1: pub mod app;
   2: pub mod pty;
   3: pub mod ui;
   4: 
@@ -3215,146 +3350,149 @@ repomix.md</directory_structure><files>This section contains the contents of the
 115:                             KeyCode::Char(&apos;x&apos;) =&gt; {
 116:                                 app.cancel_selected_campaign(workspace_h, workspace_w);
 117:                             }
-118:                             KeyCode::F(6) | KeyCode::Tab =&gt; {
-119:                                 if app.pty.is_running() {
-120:                                     app.focused_pane = FocusedPane::Terminal;
-121:                                 }
-122:                             }
-123:                             KeyCode::Enter =&gt; {
-124:                                 // If PTY is not running, load it, then focus terminal to talk
-125:                                 app.sync_pty_with_selection(workspace_h, workspace_w);
-126:                                 if app.pty.is_running() {
-127:                                     app.focused_pane = FocusedPane::Terminal;
-128:                                     app.set_message(&quot;Focused Codex. Type to interact. [F6/Tab/Esc] returns to sidebar.&quot;);
-129:                                 }
-130:                             }
-131:                             _ =&gt; {}
-132:                         }
-133:                     }
-134:                 }
-135:                 Event::Mouse(mouse_event) =&gt; {
-136:                     if app.modal.is_none() {
-137:                         let click_x = mouse_event.column;
-138:                         let click_y = mouse_event.row;
-139: 
-140:                         // Sidebar is left 32 cols
-141:                         if click_x &lt;= 32 {
-142:                             match mouse_event.kind {
-143:                                 MouseEventKind::Down(MouseButton::Left) =&gt; {
-144:                                     app.focused_pane = FocusedPane::Sidebar;
-145:                                     let start_y = 4;
-146:                                     let card_height = 4;
-147:                                     if click_y &gt;= start_y {
-148:                                         let clicked_card = ((click_y.saturating_sub(start_y)) / card_height) as usize;
-149:                                         let real_idx = clicked_card + app.scroll_offset;
-150:                                         app.select_index(real_idx, workspace_h, workspace_w);
-151:                                     }
-152:                                 }
-153:                                 MouseEventKind::ScrollUp =&gt; {
-154:                                     app.previous(workspace_h, workspace_w);
+118:                             KeyCode::Char(&apos;a&apos;) =&gt; {
+119:                                 app.archive_selected_task(workspace_h, workspace_w);
+120:                             }
+121:                             KeyCode::F(6) | KeyCode::Tab =&gt; {
+122:                                 if app.pty.is_running() {
+123:                                     app.focused_pane = FocusedPane::Terminal;
+124:                                 }
+125:                             }
+126:                             KeyCode::Enter =&gt; {
+127:                                 // If PTY is not running, load it, then focus terminal to talk
+128:                                 app.sync_pty_with_selection(workspace_h, workspace_w);
+129:                                 if app.pty.is_running() {
+130:                                     app.focused_pane = FocusedPane::Terminal;
+131:                                     app.set_message(&quot;Focused Codex. Type to interact. [F6/Tab/Esc] returns to sidebar.&quot;);
+132:                                 }
+133:                             }
+134:                             _ =&gt; {}
+135:                         }
+136:                     }
+137:                 }
+138:                 Event::Mouse(mouse_event) =&gt; {
+139:                     if app.modal.is_none() {
+140:                         let click_x = mouse_event.column;
+141:                         let click_y = mouse_event.row;
+142: 
+143:                         // Sidebar is left 32 cols
+144:                         if click_x &lt;= 32 {
+145:                             match mouse_event.kind {
+146:                                 MouseEventKind::Down(MouseButton::Left) =&gt; {
+147:                                     app.focused_pane = FocusedPane::Sidebar;
+148:                                     let start_y = 4;
+149:                                     let card_height = 4;
+150:                                     if click_y &gt;= start_y {
+151:                                         let clicked_card = ((click_y.saturating_sub(start_y)) / card_height) as usize;
+152:                                         let real_idx = clicked_card + app.scroll_offset;
+153:                                         app.select_index(real_idx, workspace_h, workspace_w);
+154:                                     }
 155:                                 }
-156:                                 MouseEventKind::ScrollDown =&gt; {
-157:                                     app.next(workspace_h, workspace_w);
+156:                                 MouseEventKind::ScrollUp =&gt; {
+157:                                     app.previous(workspace_h, workspace_w);
 158:                                 }
-159:                                 _ =&gt; {}
-160:                             }
-161:                         } else {
-162:                             // Right workspace pane (Codex or OpenCode live terminal)
-163:                             if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
-164:                                 if app.pty.is_running() {
-165:                                     app.focused_pane = FocusedPane::Terminal;
-166:                                 }
-167:                             }
-168:                             if app.pty.is_running() {
-169:                                 forward_mouse_to_pty(&amp;mut app.pty, mouse_event, 34, 4);
+159:                                 MouseEventKind::ScrollDown =&gt; {
+160:                                     app.next(workspace_h, workspace_w);
+161:                                 }
+162:                                 _ =&gt; {}
+163:                             }
+164:                         } else {
+165:                             // Right workspace pane (Codex or OpenCode live terminal)
+166:                             if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+167:                                 if app.pty.is_running() {
+168:                                     app.focused_pane = FocusedPane::Terminal;
+169:                                 }
 170:                             }
-171:                         }
-172:                     }
-173:                 }
-174:                 Event::Resize(new_cols, new_rows) =&gt; {
-175:                     let w = new_cols.saturating_sub(34).max(20);
-176:                     let h = new_rows.saturating_sub(8).max(10);
-177:                     app.pty.resize(h, w);
-178:                 }
-179:                 _ =&gt; {}
-180:             }
-181:         }
-182: 
-183:         // Auto refresh state every 2 seconds
-184:         if last_refresh.elapsed() &gt;= Duration::from_secs(2) {
-185:             app.refresh();
-186:             last_refresh = std::time::Instant::now();
-187:         }
-188:     }
-189: 
-190:     Ok(())
-191: }
+171:                             if app.pty.is_running() {
+172:                                 forward_mouse_to_pty(&amp;mut app.pty, mouse_event, 34, 4);
+173:                             }
+174:                         }
+175:                     }
+176:                 }
+177:                 Event::Resize(new_cols, new_rows) =&gt; {
+178:                     let w = new_cols.saturating_sub(34).max(20);
+179:                     let h = new_rows.saturating_sub(8).max(10);
+180:                     app.pty.resize(h, w);
+181:                 }
+182:                 _ =&gt; {}
+183:             }
+184:         }
+185: 
+186:         // Auto refresh state every 2 seconds
+187:         if last_refresh.elapsed() &gt;= Duration::from_secs(2) {
+188:             app.refresh();
+189:             last_refresh = std::time::Instant::now();
+190:         }
+191:     }
 192: 
-193: fn forward_key_to_pty(pty: &amp;mut crate::tui::pty::PtySession, key: crossterm::event::KeyEvent) -&gt; Result&lt;()&gt; {
-194:     match key.code {
-195:         KeyCode::Char(c) =&gt; {
-196:             if key.modifiers.contains(KeyModifiers::CONTROL) {
-197:                 let byte = match c {
-198:                     &apos;c&apos; =&gt; 0x03,
-199:                     &apos;d&apos; =&gt; 0x04,
-200:                     &apos;z&apos; =&gt; 0x1A,
-201:                     &apos;l&apos; =&gt; 0x0C,
-202:                     _ =&gt; (c as u8) &amp; 0x1F,
-203:                 };
-204:                 pty.write_input(&amp;[byte])?;
-205:             } else {
-206:                 let mut buf = [0u8; 4];
-207:                 let s = c.encode_utf8(&amp;mut buf);
-208:                 pty.write_input(s.as_bytes())?;
-209:             }
-210:         }
-211:         KeyCode::Enter =&gt; pty.write_input(&amp;[13])?,
-212:         KeyCode::Backspace =&gt; pty.write_input(&amp;[0x7F])?,
-213:         KeyCode::Up =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;A&apos;])?,
-214:         KeyCode::Down =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;B&apos;])?,
-215:         KeyCode::Right =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;C&apos;])?,
-216:         KeyCode::Left =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;D&apos;])?,
-217:         KeyCode::Home =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;H&apos;])?,
-218:         KeyCode::End =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;F&apos;])?,
-219:         KeyCode::PageUp =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;5&apos;, b&apos;~&apos;])?,
-220:         KeyCode::PageDown =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;6&apos;, b&apos;~&apos;])?,
-221:         KeyCode::Delete =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;3&apos;, b&apos;~&apos;])?,
-222:         KeyCode::Esc =&gt; pty.write_input(&amp;[0x1B])?,
-223:         _ =&gt; {}
-224:     }
-225:     Ok(())
-226: }
-227: 
-228: 
-229: fn forward_mouse_to_pty(
-230:     pty: &amp;mut crate::tui::pty::PtySession,
-231:     mouse: crossterm::event::MouseEvent,
-232:     offset_x: u16,
-233:     offset_y: u16,
-234: ) {
-235:     if mouse.column &lt; offset_x || mouse.row &lt; offset_y {
-236:         return;
-237:     }
-238:     let pty_col = mouse.column.saturating_sub(offset_x) + 1;
-239:     let pty_row = mouse.row.saturating_sub(offset_y) + 1;
-240: 
-241:     let (btn, is_release) = match mouse.kind {
-242:         MouseEventKind::Down(MouseButton::Left) =&gt; (0, false),
-243:         MouseEventKind::Down(MouseButton::Middle) =&gt; (1, false),
-244:         MouseEventKind::Down(MouseButton::Right) =&gt; (2, false),
-245:         MouseEventKind::Up(MouseButton::Left) =&gt; (0, true),
-246:         MouseEventKind::Up(MouseButton::Middle) =&gt; (1, true),
-247:         MouseEventKind::Up(MouseButton::Right) =&gt; (2, true),
-248:         MouseEventKind::Drag(MouseButton::Left) =&gt; (32, false),
-249:         MouseEventKind::ScrollUp =&gt; (64, false),
-250:         MouseEventKind::ScrollDown =&gt; (65, false),
-251:         _ =&gt; return,
-252:     };
-253: 
-254:     let suffix = if is_release { &apos;m&apos; } else { &apos;M&apos; };
-255:     let seq = format!(&quot;[&lt;{};{};{}{}&quot;, btn, pty_col, pty_row, suffix);
-256:     let _ = pty.write_input(seq.as_bytes());
-257: }</file><file path="src/tui/ui.rs">  1: use ratatui::{
+193:     Ok(())
+194: }
+195: 
+196: fn forward_key_to_pty(pty: &amp;mut crate::tui::pty::PtySession, key: crossterm::event::KeyEvent) -&gt; Result&lt;()&gt; {
+197:     match key.code {
+198:         KeyCode::Char(c) =&gt; {
+199:             if key.modifiers.contains(KeyModifiers::CONTROL) {
+200:                 let byte = match c {
+201:                     &apos;c&apos; =&gt; 0x03,
+202:                     &apos;d&apos; =&gt; 0x04,
+203:                     &apos;z&apos; =&gt; 0x1A,
+204:                     &apos;l&apos; =&gt; 0x0C,
+205:                     _ =&gt; (c as u8) &amp; 0x1F,
+206:                 };
+207:                 pty.write_input(&amp;[byte])?;
+208:             } else {
+209:                 let mut buf = [0u8; 4];
+210:                 let s = c.encode_utf8(&amp;mut buf);
+211:                 pty.write_input(s.as_bytes())?;
+212:             }
+213:         }
+214:         KeyCode::Enter =&gt; pty.write_input(&amp;[13])?,
+215:         KeyCode::Backspace =&gt; pty.write_input(&amp;[0x7F])?,
+216:         KeyCode::Up =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;A&apos;])?,
+217:         KeyCode::Down =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;B&apos;])?,
+218:         KeyCode::Right =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;C&apos;])?,
+219:         KeyCode::Left =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;D&apos;])?,
+220:         KeyCode::Home =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;H&apos;])?,
+221:         KeyCode::End =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;F&apos;])?,
+222:         KeyCode::PageUp =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;5&apos;, b&apos;~&apos;])?,
+223:         KeyCode::PageDown =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;6&apos;, b&apos;~&apos;])?,
+224:         KeyCode::Delete =&gt; pty.write_input(&amp;[0x1B, b&apos;[&apos;, b&apos;3&apos;, b&apos;~&apos;])?,
+225:         KeyCode::Esc =&gt; pty.write_input(&amp;[0x1B])?,
+226:         _ =&gt; {}
+227:     }
+228:     Ok(())
+229: }
+230: 
+231: 
+232: fn forward_mouse_to_pty(
+233:     pty: &amp;mut crate::tui::pty::PtySession,
+234:     mouse: crossterm::event::MouseEvent,
+235:     offset_x: u16,
+236:     offset_y: u16,
+237: ) {
+238:     if mouse.column &lt; offset_x || mouse.row &lt; offset_y {
+239:         return;
+240:     }
+241:     let pty_col = mouse.column.saturating_sub(offset_x) + 1;
+242:     let pty_row = mouse.row.saturating_sub(offset_y) + 1;
+243: 
+244:     let (btn, is_release) = match mouse.kind {
+245:         MouseEventKind::Down(MouseButton::Left) =&gt; (0, false),
+246:         MouseEventKind::Down(MouseButton::Middle) =&gt; (1, false),
+247:         MouseEventKind::Down(MouseButton::Right) =&gt; (2, false),
+248:         MouseEventKind::Up(MouseButton::Left) =&gt; (0, true),
+249:         MouseEventKind::Up(MouseButton::Middle) =&gt; (1, true),
+250:         MouseEventKind::Up(MouseButton::Right) =&gt; (2, true),
+251:         MouseEventKind::Drag(MouseButton::Left) =&gt; (32, false),
+252:         MouseEventKind::ScrollUp =&gt; (64, false),
+253:         MouseEventKind::ScrollDown =&gt; (65, false),
+254:         _ =&gt; return,
+255:     };
+256: 
+257:     let suffix = if is_release { &apos;m&apos; } else { &apos;M&apos; };
+258:     let seq = format!(&quot;[&lt;{};{};{}{}&quot;, btn, pty_col, pty_row, suffix);
+259:     let _ = pty.write_input(seq.as_bytes());
+260: }</file><file path="src/tui/ui.rs">  1: use ratatui::{
   2:     layout::{Alignment, Constraint, Direction, Layout, Rect},
   3:     style::{Color, Modifier, Style},
   4:     text::{Line, Span},
@@ -3639,217 +3777,219 @@ repomix.md</directory_structure><files>This section contains the contents of the
 283:             Span::raw(&quot;New Task  &quot;),
 284:             Span::styled(&quot;[x] &quot;, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
 285:             Span::raw(&quot;Stop Task  &quot;),
-286:             Span::styled(&quot;[r] &quot;, Style::default().fg(Color::Cyan)),
-287:             Span::raw(&quot;Refresh  &quot;),
-288:             Span::styled(&quot;[q] &quot;, Style::default().fg(Color::Red)),
-289:             Span::raw(&quot;Quit&quot;),
-290:         ])
-291:     }
-292: }
-293: 
-294: fn draw_modal(frame: &amp;mut Frame, modal: &amp;crate::tui::app::ModalState, screen: Rect) {
-295:     let (width, height) = match modal.step {
-296:         ModalStep::SelectModel =&gt; {
-297:             (
-298:                 86.min(screen.width.saturating_sub(4)),
-299:                 24.min(screen.height.saturating_sub(4)),
-300:             )
-301:         }
-302:         ModalStep::EnterPrompt =&gt; {
-303:             (
-304:                 76.min(screen.width.saturating_sub(4)),
-305:                 12.min(screen.height.saturating_sub(4)),
-306:             )
-307:         }
-308:         _ =&gt; {
-309:             (
-310:                 74.min(screen.width.saturating_sub(4)),
-311:                 14.min(screen.height.saturating_sub(4)),
-312:             )
-313:         }
-314:     };
-315:     let x = (screen.width.saturating_sub(width)) / 2;
-316:     let y = (screen.height.saturating_sub(height)) / 2;
-317:     let modal_area = Rect::new(x, y, width, height);
-318: 
-319:     frame.render_widget(Clear, modal_area);
+286:             Span::styled(&quot;[a] &quot;, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+287:             Span::raw(&quot;Archive  &quot;),
+288:             Span::styled(&quot;[r] &quot;, Style::default().fg(Color::Cyan)),
+289:             Span::raw(&quot;Refresh  &quot;),
+290:             Span::styled(&quot;[q] &quot;, Style::default().fg(Color::Red)),
+291:             Span::raw(&quot;Quit&quot;),
+292:         ])
+293:     }
+294: }
+295: 
+296: fn draw_modal(frame: &amp;mut Frame, modal: &amp;crate::tui::app::ModalState, screen: Rect) {
+297:     let (width, height) = match modal.step {
+298:         ModalStep::SelectModel =&gt; {
+299:             (
+300:                 86.min(screen.width.saturating_sub(4)),
+301:                 24.min(screen.height.saturating_sub(4)),
+302:             )
+303:         }
+304:         ModalStep::EnterPrompt =&gt; {
+305:             (
+306:                 76.min(screen.width.saturating_sub(4)),
+307:                 12.min(screen.height.saturating_sub(4)),
+308:             )
+309:         }
+310:         _ =&gt; {
+311:             (
+312:                 74.min(screen.width.saturating_sub(4)),
+313:                 14.min(screen.height.saturating_sub(4)),
+314:             )
+315:         }
+316:     };
+317:     let x = (screen.width.saturating_sub(width)) / 2;
+318:     let y = (screen.height.saturating_sub(height)) / 2;
+319:     let modal_area = Rect::new(x, y, width, height);
 320: 
-321:     match modal.step {
-322:         ModalStep::SelectRepo =&gt; {
-323:             let items: Vec&lt;ListItem&gt; = modal.repos.iter().enumerate().map(|(idx, r)| {
-324:                 let is_sel = idx == modal.selected_repo_idx;
-325:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
-326:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, r));
-327:                 if is_sel {
-328:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
-329:                 }
-330:                 item
-331:             }).collect();
-332: 
-333:             let list = List::new(items)
-334:                 .block(Block::default()
-335:                     .borders(Borders::ALL)
-336:                     .title(&quot; New Task: Select Target Repository (Enter to confirm, Esc to cancel) &quot;)
-337:                     .border_style(Style::default().fg(Color::Cyan)));
-338: 
-339:             frame.render_widget(list, modal_area);
-340:         }
-341:         ModalStep::SelectEngine =&gt; {
-342:             let items: Vec&lt;ListItem&gt; = modal.engines.iter().enumerate().map(|(idx, e)| {
-343:                 let is_sel = idx == modal.selected_engine_idx;
-344:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
-345:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, e.label));
-346:                 if is_sel {
-347:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
-348:                 }
-349:                 item
-350:             }).collect();
-351: 
-352:             let list = List::new(items)
-353:                 .block(Block::default()
-354:                     .borders(Borders::ALL)
-355:                     .title(&quot; New Task: Select Agent Engine (Codex vs OpenCode) &quot;)
-356:                     .border_style(Style::default().fg(Color::Cyan)));
-357: 
-358:             frame.render_widget(list, modal_area);
-359:         }
-360:         ModalStep::SelectMode =&gt; {
-361:             let items: Vec&lt;ListItem&gt; = modal.modes.iter().enumerate().map(|(idx, m)| {
-362:                 let is_sel = idx == modal.selected_mode_idx;
-363:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
-364:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, m.label));
-365:                 if is_sel {
-366:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
-367:                 }
-368:                 item
-369:             }).collect();
-370: 
-371:             let list = List::new(items)
-372:                 .block(Block::default()
-373:                     .borders(Borders::ALL)
-374:                     .title(&quot; New Task: Select Execution Mode (Loop vs Single Task) &quot;)
-375:                     .border_style(Style::default().fg(Color::Cyan)));
-376: 
-377:             frame.render_widget(list, modal_area);
-378:         }
-379:         ModalStep::SelectModel =&gt; {
-380:             let engine_name = modal.selected_engine().label.split(&apos;(&apos;).next().unwrap_or(modal.selected_engine().id).trim();
-381:             let filtered = modal.filtered_models();
-382:             let total = filtered.len();
-383: 
-384:             let current_pos = if total &gt; 0 { modal.selected_model_idx + 1 } else { 0 };
-385:             let title_info = if modal.model_filter.is_empty() {
-386:                 format!(&quot; New Task: Select Model for {} [{}/{}] &quot;, engine_name, current_pos, total)
-387:             } else {
-388:                 format!(&quot; New Task: Select Model for {} [Match {}/{}] &quot;, engine_name, current_pos, total)
-389:             };
-390: 
-391:             let block = Block::default()
-392:                 .borders(Borders::ALL)
-393:                 .title(title_info)
-394:                 .border_style(Style::default().fg(Color::Cyan));
-395: 
-396:             let inner = block.inner(modal_area);
-397:             frame.render_widget(block, modal_area);
-398: 
-399:             let chunks = Layout::default()
-400:                 .direction(Direction::Vertical)
-401:                 .constraints([
-402:                     Constraint::Length(2), // Search bar &amp; navigation hints
-403:                     Constraint::Min(4),    // Scrollable list
-404:                 ])
-405:                 .split(inner);
-406: 
-407:             // Search filter row
-408:             let filter_line = if modal.model_filter.is_empty() {
-409:                 Line::from(vec![
-410:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-411:                     Span::styled(&quot;(Type to filter models...)  &quot;, Style::default().fg(Color::DarkGray)),
-412:                     Span::styled(&quot;[↑/↓] &quot;, Style::default().fg(Color::Green)),
-413:                     Span::raw(&quot;Scroll  &quot;),
-414:                     Span::styled(&quot;[PgUp/PgDn] &quot;, Style::default().fg(Color::Yellow)),
-415:                     Span::raw(&quot;Page  &quot;),
-416:                     Span::styled(&quot;[Enter] &quot;, Style::default().fg(Color::Cyan)),
-417:                     Span::raw(&quot;Select&quot;),
-418:                 ])
-419:             } else {
-420:                 Line::from(vec![
-421:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-422:                     Span::styled(format!(&quot;&apos;{}&apos;█ &quot;, modal.model_filter), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-423:                     Span::styled(&quot;(Backspace deletes, Esc/Ctrl-U clears filter)&quot;, Style::default().fg(Color::DarkGray)),
-424:                 ])
-425:             };
-426:             let sep_line = Line::from(Span::styled(&quot;  ──────────────────────────────────────────────────────────────────────────────&quot;, Style::default().fg(Color::Rgb(40, 42, 58))));
-427:             let search_widget = Paragraph::new(vec![filter_line, sep_line]);
-428:             frame.render_widget(search_widget, chunks[0]);
-429: 
-430:             // Scrollable List Area
-431:             let list_area = chunks[1];
-432:             let visible_rows = list_area.height as usize;
-433:             let mut scroll_offset = 0;
-434:             if modal.selected_model_idx &gt;= visible_rows {
-435:                 scroll_offset = modal.selected_model_idx.saturating_sub(visible_rows.saturating_sub(1));
-436:             }
-437: 
-438:             let end_idx = (scroll_offset + visible_rows).min(total);
-439:             let visible_slice = if total &gt; 0 { &amp;filtered[scroll_offset..end_idx] } else { &amp;[] };
-440: 
-441:             let items: Vec&lt;ListItem&gt; = visible_slice.iter().map(|(real_idx, m)| {
-442:                 let is_sel = *real_idx == modal.selected_model_idx;
-443:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
-444:                 let num = real_idx + 1;
-445:                 let text = format!(&quot;{:&gt;2}. {}{}&quot;, num, prefix, m.label);
-446:                 let mut item = ListItem::new(text);
-447:                 if is_sel {
-448:                     item = item.style(
-449:                         Style::default()
-450:                             .fg(Color::Cyan)
-451:                             .add_modifier(Modifier::BOLD)
-452:                             .bg(Color::Rgb(30, 32, 48)),
-453:                     );
-454:                 }
-455:                 item
-456:             }).collect();
-457: 
-458:             if items.is_empty() {
-459:                 let empty = Paragraph::new(format!(&quot;  No models match query &apos;{}&apos;. Press Backspace or Esc to clear.&quot;, modal.model_filter))
-460:                     .style(Style::default().fg(Color::Red));
-461:                 frame.render_widget(empty, list_area);
-462:             } else {
-463:                 let list = List::new(items);
-464:                 frame.render_widget(list, list_area);
-465:             }
-466:         }
-467:         ModalStep::EnterPrompt =&gt; {
-468:             let mode_tag = if modal.selected_mode().id == &quot;continuous&quot; { &quot;24/7 Loop (30 iters)&quot; } else { &quot;Single Task&quot; };
-469:             let engine_tag = modal.selected_engine().id.to_uppercase();
-470:             let title = format!(&quot; New Task: [{}] · [{}] · {} &quot;, modal.selected_repo(), engine_tag, mode_tag);
-471: 
-472:             let block = Block::default()
-473:                 .borders(Borders::ALL)
-474:                 .title(title)
-475:                 .border_style(Style::default().fg(Color::Cyan));
-476: 
-477:             let inner = block.inner(modal_area);
-478:             frame.render_widget(block, modal_area);
-479: 
-480:             let chunks = Layout::default()
-481:                 .direction(Direction::Vertical)
-482:                 .constraints([Constraint::Length(1), Constraint::Min(2), Constraint::Length(1)])
-483:                 .split(inner);
-484: 
-485:             let label = Paragraph::new(format!(&quot;Engine: {} │ Enter campaign objective:&quot;, engine_tag))
-486:                 .style(Style::default().fg(Color::Gray));
-487:             frame.render_widget(label, chunks[0]);
-488: 
-489:             let input = Paragraph::new(modal.prompt_buffer.as_str())
-490:                 .style(Style::default().fg(Color::White).bg(Color::Rgb(30, 32, 48)))
-491:                 .wrap(Wrap { trim: false });
-492:             frame.render_widget(input, chunks[1]);
-493: 
-494:             let hint = Paragraph::new(&quot;[Enter] Launch Campaign    [Esc] Cancel&quot;)
-495:                 .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
-496:             frame.render_widget(hint, chunks[2]);
-497:         }
-498:     }
-499: }</file></files></repomix>
+321:     frame.render_widget(Clear, modal_area);
+322: 
+323:     match modal.step {
+324:         ModalStep::SelectRepo =&gt; {
+325:             let items: Vec&lt;ListItem&gt; = modal.repos.iter().enumerate().map(|(idx, r)| {
+326:                 let is_sel = idx == modal.selected_repo_idx;
+327:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+328:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, r));
+329:                 if is_sel {
+330:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+331:                 }
+332:                 item
+333:             }).collect();
+334: 
+335:             let list = List::new(items)
+336:                 .block(Block::default()
+337:                     .borders(Borders::ALL)
+338:                     .title(&quot; New Task: Select Target Repository (Enter to confirm, Esc to cancel) &quot;)
+339:                     .border_style(Style::default().fg(Color::Cyan)));
+340: 
+341:             frame.render_widget(list, modal_area);
+342:         }
+343:         ModalStep::SelectEngine =&gt; {
+344:             let items: Vec&lt;ListItem&gt; = modal.engines.iter().enumerate().map(|(idx, e)| {
+345:                 let is_sel = idx == modal.selected_engine_idx;
+346:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+347:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, e.label));
+348:                 if is_sel {
+349:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+350:                 }
+351:                 item
+352:             }).collect();
+353: 
+354:             let list = List::new(items)
+355:                 .block(Block::default()
+356:                     .borders(Borders::ALL)
+357:                     .title(&quot; New Task: Select Agent Engine (Codex vs OpenCode) &quot;)
+358:                     .border_style(Style::default().fg(Color::Cyan)));
+359: 
+360:             frame.render_widget(list, modal_area);
+361:         }
+362:         ModalStep::SelectMode =&gt; {
+363:             let items: Vec&lt;ListItem&gt; = modal.modes.iter().enumerate().map(|(idx, m)| {
+364:                 let is_sel = idx == modal.selected_mode_idx;
+365:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+366:                 let mut item = ListItem::new(format!(&quot;{}{}&quot;, prefix, m.label));
+367:                 if is_sel {
+368:                     item = item.style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(Color::Rgb(30, 32, 48)));
+369:                 }
+370:                 item
+371:             }).collect();
+372: 
+373:             let list = List::new(items)
+374:                 .block(Block::default()
+375:                     .borders(Borders::ALL)
+376:                     .title(&quot; New Task: Select Execution Mode (Loop vs Single Task) &quot;)
+377:                     .border_style(Style::default().fg(Color::Cyan)));
+378: 
+379:             frame.render_widget(list, modal_area);
+380:         }
+381:         ModalStep::SelectModel =&gt; {
+382:             let engine_name = modal.selected_engine().label.split(&apos;(&apos;).next().unwrap_or(modal.selected_engine().id).trim();
+383:             let filtered = modal.filtered_models();
+384:             let total = filtered.len();
+385: 
+386:             let current_pos = if total &gt; 0 { modal.selected_model_idx + 1 } else { 0 };
+387:             let title_info = if modal.model_filter.is_empty() {
+388:                 format!(&quot; New Task: Select Model for {} [{}/{}] &quot;, engine_name, current_pos, total)
+389:             } else {
+390:                 format!(&quot; New Task: Select Model for {} [Match {}/{}] &quot;, engine_name, current_pos, total)
+391:             };
+392: 
+393:             let block = Block::default()
+394:                 .borders(Borders::ALL)
+395:                 .title(title_info)
+396:                 .border_style(Style::default().fg(Color::Cyan));
+397: 
+398:             let inner = block.inner(modal_area);
+399:             frame.render_widget(block, modal_area);
+400: 
+401:             let chunks = Layout::default()
+402:                 .direction(Direction::Vertical)
+403:                 .constraints([
+404:                     Constraint::Length(2), // Search bar &amp; navigation hints
+405:                     Constraint::Min(4),    // Scrollable list
+406:                 ])
+407:                 .split(inner);
+408: 
+409:             // Search filter row
+410:             let filter_line = if modal.model_filter.is_empty() {
+411:                 Line::from(vec![
+412:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+413:                     Span::styled(&quot;(Type to filter models...)  &quot;, Style::default().fg(Color::DarkGray)),
+414:                     Span::styled(&quot;[↑/↓] &quot;, Style::default().fg(Color::Green)),
+415:                     Span::raw(&quot;Scroll  &quot;),
+416:                     Span::styled(&quot;[PgUp/PgDn] &quot;, Style::default().fg(Color::Yellow)),
+417:                     Span::raw(&quot;Page  &quot;),
+418:                     Span::styled(&quot;[Enter] &quot;, Style::default().fg(Color::Cyan)),
+419:                     Span::raw(&quot;Select&quot;),
+420:                 ])
+421:             } else {
+422:                 Line::from(vec![
+423:                     Span::styled(&quot;  Search: &quot;, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+424:                     Span::styled(format!(&quot;&apos;{}&apos;█ &quot;, modal.model_filter), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+425:                     Span::styled(&quot;(Backspace deletes, Esc/Ctrl-U clears filter)&quot;, Style::default().fg(Color::DarkGray)),
+426:                 ])
+427:             };
+428:             let sep_line = Line::from(Span::styled(&quot;  ──────────────────────────────────────────────────────────────────────────────&quot;, Style::default().fg(Color::Rgb(40, 42, 58))));
+429:             let search_widget = Paragraph::new(vec![filter_line, sep_line]);
+430:             frame.render_widget(search_widget, chunks[0]);
+431: 
+432:             // Scrollable List Area
+433:             let list_area = chunks[1];
+434:             let visible_rows = list_area.height as usize;
+435:             let mut scroll_offset = 0;
+436:             if modal.selected_model_idx &gt;= visible_rows {
+437:                 scroll_offset = modal.selected_model_idx.saturating_sub(visible_rows.saturating_sub(1));
+438:             }
+439: 
+440:             let end_idx = (scroll_offset + visible_rows).min(total);
+441:             let visible_slice = if total &gt; 0 { &amp;filtered[scroll_offset..end_idx] } else { &amp;[] };
+442: 
+443:             let items: Vec&lt;ListItem&gt; = visible_slice.iter().map(|(real_idx, m)| {
+444:                 let is_sel = *real_idx == modal.selected_model_idx;
+445:                 let prefix = if is_sel { &quot;▸ &quot; } else { &quot;  &quot; };
+446:                 let num = real_idx + 1;
+447:                 let text = format!(&quot;{:&gt;2}. {}{}&quot;, num, prefix, m.label);
+448:                 let mut item = ListItem::new(text);
+449:                 if is_sel {
+450:                     item = item.style(
+451:                         Style::default()
+452:                             .fg(Color::Cyan)
+453:                             .add_modifier(Modifier::BOLD)
+454:                             .bg(Color::Rgb(30, 32, 48)),
+455:                     );
+456:                 }
+457:                 item
+458:             }).collect();
+459: 
+460:             if items.is_empty() {
+461:                 let empty = Paragraph::new(format!(&quot;  No models match query &apos;{}&apos;. Press Backspace or Esc to clear.&quot;, modal.model_filter))
+462:                     .style(Style::default().fg(Color::Red));
+463:                 frame.render_widget(empty, list_area);
+464:             } else {
+465:                 let list = List::new(items);
+466:                 frame.render_widget(list, list_area);
+467:             }
+468:         }
+469:         ModalStep::EnterPrompt =&gt; {
+470:             let mode_tag = if modal.selected_mode().id == &quot;continuous&quot; { &quot;24/7 Loop (30 iters)&quot; } else { &quot;Single Task&quot; };
+471:             let engine_tag = modal.selected_engine().id.to_uppercase();
+472:             let title = format!(&quot; New Task: [{}] · [{}] · {} &quot;, modal.selected_repo(), engine_tag, mode_tag);
+473: 
+474:             let block = Block::default()
+475:                 .borders(Borders::ALL)
+476:                 .title(title)
+477:                 .border_style(Style::default().fg(Color::Cyan));
+478: 
+479:             let inner = block.inner(modal_area);
+480:             frame.render_widget(block, modal_area);
+481: 
+482:             let chunks = Layout::default()
+483:                 .direction(Direction::Vertical)
+484:                 .constraints([Constraint::Length(1), Constraint::Min(2), Constraint::Length(1)])
+485:                 .split(inner);
+486: 
+487:             let label = Paragraph::new(format!(&quot;Engine: {} │ Enter campaign objective:&quot;, engine_tag))
+488:                 .style(Style::default().fg(Color::Gray));
+489:             frame.render_widget(label, chunks[0]);
+490: 
+491:             let input = Paragraph::new(modal.prompt_buffer.as_str())
+492:                 .style(Style::default().fg(Color::White).bg(Color::Rgb(30, 32, 48)))
+493:                 .wrap(Wrap { trim: false });
+494:             frame.render_widget(input, chunks[1]);
+495: 
+496:             let hint = Paragraph::new(&quot;[Enter] Launch Campaign    [Esc] Cancel&quot;)
+497:                 .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+498:             frame.render_widget(hint, chunks[2]);
+499:         }
+500:     }
+501: }</file></files></repomix>
