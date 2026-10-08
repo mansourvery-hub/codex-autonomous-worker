@@ -283,6 +283,8 @@ fn default_footer_line(app: &App) -> Line<'static> {
             Span::raw("New Task  "),
             Span::styled("[x] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw("Stop Task  "),
+            Span::styled("[a] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw("Archive  "),
             Span::styled("[r] ", Style::default().fg(Color::Cyan)),
             Span::raw("Refresh  "),
             Span::styled("[q] ", Style::default().fg(Color::Red)),

@@ -85,6 +85,20 @@ pub enum Commands {
         last: bool,
     },
 
+    /// Archive completed or failed tasks to keep the active list clean
+    Archive {
+        /// Task ID to archive (e.g. 001)
+        task_id: Option<String>,
+
+        /// Archive all completed and failed tasks
+        #[arg(long)]
+        all: bool,
+
+        /// List archived tasks
+        #[arg(long)]
+        list: bool,
+    },
+
     /// Run the 24/7 background supervisor daemon (used by systemd)
     Daemon,
 }

@@ -305,6 +305,33 @@ impl App {
         self.modal = None;
     }
 
+    pub fn archive_selected_task(&mut self, term_h: u16, term_w: u16) {
+        let task = match self.selected_campaign() {
+            Some(t) => t.clone(),
+            None => return,
+        };
+
+        if task.status == CampaignStatus::Running || task.status == CampaignStatus::Claimed {
+            self.set_message(format!("Cannot archive active task #{}. Stop it first with [x].", task.id));
+            return;
+        }
+
+        match crate::campaign::archive_task(&self.config, &task.id) {
+            Ok(Some(_)) => {
+                self.set_message(format!("Archived task #{}.", task.id));
+                self.pty.kill();
+                self.refresh();
+                self.sync_pty_with_selection(term_h, term_w);
+            }
+            Ok(None) => {
+                self.set_message(format!("Task #{} not found.", task.id));
+            }
+            Err(e) => {
+                self.set_message(format!("Error archiving task #{}: {}", task.id, e));
+            }
+        }
+    }
+
     pub fn cancel_selected_campaign(&mut self, term_h: u16, term_w: u16) {
         let campaign = match self.selected_campaign() {
             Some(c) => c.clone(),

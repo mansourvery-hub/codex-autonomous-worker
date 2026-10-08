@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::Parser;
 use autopilot::cli::{Cli, Commands};
 use autopilot::config::AppConfig;
-use autopilot::campaign::{load_all_campaigns, queue_campaign, CampaignStatus};
+use autopilot::campaign::{archive_all_completed, archive_task, load_all_campaigns, queue_campaign, CampaignStatus};
 use autopilot::supervisor::Supervisor;
 use autopilot::tui::run_tui;
 
@@ -135,6 +135,38 @@ Launch 'autopilot' to enter the live control deck.");
                 }
             } else {
                 println!("No logs found.");
+            }
+        }
+        Some(Commands::Archive { task_id, all, list }) => {
+            if list {
+                let archive_dir = config.tasks_dir().join("archive");
+                if archive_dir.exists() {
+                    let mut files = Vec::new();
+                    if let Ok(entries) = std::fs::read_dir(&archive_dir) {
+                        for e in entries.flatten() {
+                            if e.path().is_file() {
+                                files.push(e.file_name().to_string_lossy().to_string());
+                            }
+                        }
+                    }
+                    files.sort();
+                    println!("[1m=== Archived Tasks ({}) ===[0m", files.len());
+                    for f in files {
+                        println!("  {}", f);
+                    }
+                } else {
+                    println!("No archived tasks found.");
+                }
+            } else if all {
+                let count = archive_all_completed(&config)?;
+                println!("[32m✔ Successfully archived {} completed/failed tasks to tasks/archive/.[0m", count);
+            } else if let Some(id) = task_id {
+                match archive_task(&config, &id)? {
+                    Some(p) => println!("[32m✔ Successfully archived task #{} to {:?}.[0m", id, p),
+                    None => println!("Task #{} not found.", id),
+                }
+            } else {
+                println!("Usage: autopilot archive <TASK_ID> | --all | --list");
             }
         }
         Some(Commands::Daemon) => {

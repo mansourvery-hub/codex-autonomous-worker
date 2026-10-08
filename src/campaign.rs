@@ -399,3 +399,65 @@ pub fn queue_campaign(
 
     Ok(next_id)
 }
+
+pub fn archive_task(config: &AppConfig, task_id: &str) -> Result<Option<PathBuf>> {
+    let tasks_dir = config.tasks_dir();
+    let archive_dir = tasks_dir.join("archive");
+    fs::create_dir_all(&archive_dir)?;
+
+    let entries = fs::read_dir(&tasks_dir)?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let id = stem.split('.').next().unwrap_or("").split('-').next().unwrap_or("");
+        if id == task_id {
+            let dest = archive_dir.join(&fname);
+            fs::rename(&path, &dest)?;
+
+            let state_file = config.state_dir().join(format!("task-{}.json", task_id));
+            let _ = fs::remove_file(state_file);
+            let worktree_dir = config.worktrees_dir().join(format!("task-{}", task_id));
+            let _ = fs::remove_dir_all(&worktree_dir);
+
+            return Ok(Some(dest));
+        }
+    }
+    Ok(None)
+}
+
+pub fn archive_all_completed(config: &AppConfig) -> Result<usize> {
+    let tasks_dir = config.tasks_dir();
+    let archive_dir = tasks_dir.join("archive");
+    fs::create_dir_all(&archive_dir)?;
+
+    let mut count = 0;
+    let entries = fs::read_dir(&tasks_dir)?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let is_done = fname.contains(".done.") || fname.ends_with(".done.yaml") || fname.ends_with(".done.json");
+        let is_failed = fname.contains(".failed.") || fname.ends_with(".failed.yaml") || fname.ends_with(".failed.json");
+        if is_done || is_failed {
+            let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+            let task_id = stem.split('.').next().unwrap_or("").split('-').next().unwrap_or("");
+
+            let dest = archive_dir.join(&fname);
+            fs::rename(&path, &dest)?;
+
+            let state_file = config.state_dir().join(format!("task-{}.json", task_id));
+            let _ = fs::remove_file(state_file);
+            let worktree_dir = config.worktrees_dir().join(format!("task-{}", task_id));
+            let _ = fs::remove_dir_all(&worktree_dir);
+
+            count += 1;
+        }
+    }
+    Ok(count)
+}

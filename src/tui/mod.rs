@@ -115,6 +115,9 @@ fn run_loop(
                             KeyCode::Char('x') => {
                                 app.cancel_selected_campaign(workspace_h, workspace_w);
                             }
+                            KeyCode::Char('a') => {
+                                app.archive_selected_task(workspace_h, workspace_w);
+                            }
                             KeyCode::F(6) | KeyCode::Tab => {
                                 if app.pty.is_running() {
                                     app.focused_pane = FocusedPane::Terminal;
