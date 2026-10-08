@@ -1207,9 +1207,15 @@ repomix.md</directory_structure><files>This section contains the contents of the
 176: 
 177: ---
 178: 
-179: ## License
+179: ## Support
 180: 
-181: MIT</file><file path="src/cli.rs">  1: use clap::{Parser, Subcommand};
+181: Building small, useful software — if this project saves you time, consider [buying me a coffee](https://buymeacoffee.com/cassandre60) to help keep it maintained.
+182: 
+183: &lt;a href=&quot;https://buymeacoffee.com/cassandre60&quot;&gt;&lt;img src=&quot;https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png&quot; width=&quot;150&quot; alt=&quot;Buy Me A Coffee&quot;&gt;&lt;/a&gt;
+184: 
+185: ## License
+186: 
+187: MIT</file><file path="src/cli.rs">  1: use clap::{Parser, Subcommand};
   2: 
   3: #[derive(Parser, Debug)]
   4: #[command(name = &quot;autopilot&quot;)]
