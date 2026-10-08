@@ -1310,9 +1310,57 @@ repomix.md</directory_structure><files>This section contains the contents of the
  99:         list: bool,
 100:     },
 101: 
-102:     /// Run the 24/7 background supervisor daemon (used by systemd)
-103:     Daemon,
-104: }</file><file path="src/campaign.rs">  1: use std::fs;
+102:     /// Unarchive tasks back into the active list
+103:     Unarchive {
+104:         /// Task ID to restore (e.g. 001)
+105:         task_id: Option&lt;String&gt;,
+106: 
+107:         /// Unarchive all archived tasks
+108:         #[arg(long)]
+109:         all: bool,
+110:     },
+111: 
+112:     /// Run the 24/7 background supervisor daemon (used by systemd)
+113:     Daemon,
+114: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
+ 2: 
+ 3: ## Project Structure &amp; Module Organization
+ 4: 
+ 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
+ 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
+ 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
+ 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
+ 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
+10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
+11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
+12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
+13: 
+14: ## Build, Test, and Development Commands
+15: 
+16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
+17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
+18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
+19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
+20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
+21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
+22: - `autopilot current`: Shows details for the currently active campaign.
+23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
+24: 
+25: ## Coding Style &amp; Naming Conventions
+26: 
+27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
+28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
+29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
+30: 
+31: ## Testing Guidelines
+32: 
+33: - **Validation**: Run `cargo test --all` before submitting any change.
+34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
+35: 
+36: ## Commit &amp; Pull Request Guidelines
+37: 
+38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
+39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/campaign.rs">  1: use std::fs;
   2: use std::path::{Path, PathBuf};
   3: use std::time::SystemTime;
   4: use anyhow::{Context, Result};
@@ -1774,50 +1822,56 @@ repomix.md</directory_structure><files>This section contains the contents of the
 460:         }
 461:     }
 462:     Ok(count)
-463: }</file><file path="AGENTS.md"> 1: # Repository Guidelines
- 2: 
- 3: ## Project Structure &amp; Module Organization
- 4: 
- 5: - `src/main.rs`: Main binary entrypoint for CLI command dispatch and TUI launch.
- 6: - `src/cli.rs`: Clap-derived CLI command structures (`tui`, `loop`, `queue`, `list`, `current`, `daemon`, `logs`, `history`).
- 7: - `src/config.rs`: Configuration loader, filesystem paths, and gateway proxy settings.
- 8: - `src/campaign.rs`: Domain models, task queue parsing, session discovery, and state machine.
- 9: - `src/supervisor.rs`: 24/7 background autonomous engineering supervisor daemon and heartbeat driver loop.
-10: - `src/tui/`: High-performance terminal control deck built on Ratatui and Crossterm (`app.rs`, `ui.rs`).
-11: - `systemd/`: Service unit definitions for `codex-worker` and `cliproxyapi`.
-12: - `prompts/task_prompt.md`: Standard autonomous engineering instructions (`PLAN.md` protocol, test-first fixes).
-13: 
-14: ## Build, Test, and Development Commands
-15: 
-16: - `cargo build --release`: Compiles the self-contained `autopilot` binary into `target/release/autopilot`.
-17: - `cargo test --all`: Runs all domain model, duration formatting, and configuration roundtrip tests.
-18: - `autopilot`: Launches the keyboard-navigable Ratatui control deck.
-19: - `autopilot loop [prompt] [--agent &lt;codex|opencode&gt;]`: Launches a 24/7 autonomous continuous loop campaign and opens the deck.
-20: - `autopilot queue &quot;prompt&quot; [--agent &lt;codex|opencode&gt;]`: Queues a new continuous engineering campaign.
-21: - `autopilot list`: Displays active, queued, and completed campaigns with color-coded status pills.
-22: - `autopilot current`: Shows details for the currently active campaign.
-23: - `autopilot daemon`: Runs the 24/7 background supervisor service (managed by systemd).
-24: 
-25: ## Coding Style &amp; Naming Conventions
-26: 
-27: - **Language &amp; Style**: Idiomatic Rust 2021 edition adhering to standard rustfmt conventions.
-28: - **Error Handling**: Use `anyhow::Result` for application-level error context and explicit enum variants for domain states.
-29: - **Naming Patterns**: Use `snake_case` for functions and modules, `PascalCase` for structs and enums.
-30: 
-31: ## Testing Guidelines
-32: 
-33: - **Validation**: Run `cargo test --all` before submitting any change.
-34: - **Determinism**: Test all domain state transitions and duration formatters with isolated unit tests.
-35: 
-36: ## Commit &amp; Pull Request Guidelines
-37: 
-38: - **Commit Messages**: Follow Conventional Commits format (`type(scope): description`), such as `feat(core): rewrite autopilot in Rust` or `fix(tui): improve session resumption`.
-39: - **Pull Requests**: Include a clear summary of the problem, changes made, and validation steps.</file><file path="src/main.rs">  1: use std::process::Command;
+463: }
+464: 
+465: pub fn unarchive_task(config: &amp;AppConfig, task_id: &amp;str) -&gt; Result&lt;Option&lt;PathBuf&gt;&gt; {
+466:     let tasks_dir = config.tasks_dir();
+467:     let archive_dir = tasks_dir.join(&quot;archive&quot;);
+468:     if !archive_dir.exists() {
+469:         return Ok(None);
+470:     }
+471:     let entries = fs::read_dir(&amp;archive_dir)?;
+472:     for entry in entries.flatten() {
+473:         let path = entry.path();
+474:         if !path.is_file() {
+475:             continue;
+476:         }
+477:         let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+478:         let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+479:         let id = stem.split(&apos;.&apos;).next().unwrap_or(&quot;&quot;).split(&apos;-&apos;).next().unwrap_or(&quot;&quot;);
+480:         if id == task_id {
+481:             let dest = tasks_dir.join(&amp;fname);
+482:             fs::rename(&amp;path, &amp;dest)?;
+483:             return Ok(Some(dest));
+484:         }
+485:     }
+486:     Ok(None)
+487: }
+488: 
+489: pub fn unarchive_all(config: &amp;AppConfig) -&gt; Result&lt;usize&gt; {
+490:     let tasks_dir = config.tasks_dir();
+491:     let archive_dir = tasks_dir.join(&quot;archive&quot;);
+492:     if !archive_dir.exists() {
+493:         return Ok(0);
+494:     }
+495:     let mut count = 0;
+496:     let entries = fs::read_dir(&amp;archive_dir)?;
+497:     for entry in entries.flatten() {
+498:         let path = entry.path();
+499:         if path.is_file() {
+500:             let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+501:             let dest = tasks_dir.join(&amp;fname);
+502:             fs::rename(&amp;path, &amp;dest)?;
+503:             count += 1;
+504:         }
+505:     }
+506:     Ok(count)
+507: }</file><file path="src/main.rs">  1: use std::process::Command;
   2: use anyhow::Result;
   3: use clap::Parser;
   4: use autopilot::cli::{Cli, Commands};
   5: use autopilot::config::AppConfig;
-  6: use autopilot::campaign::{archive_all_completed, archive_task, load_all_campaigns, queue_campaign, CampaignStatus};
+  6: use autopilot::campaign::{archive_all_completed, archive_task, unarchive_all, unarchive_task, load_all_campaigns, queue_campaign, CampaignStatus};
   7: use autopilot::supervisor::Supervisor;
   8: use autopilot::tui::run_tui;
   9: 
@@ -1983,14 +2037,27 @@ repomix.md</directory_structure><files>This section contains the contents of the
 169:                 println!(&quot;Usage: autopilot archive &lt;TASK_ID&gt; | --all | --list&quot;);
 170:             }
 171:         }
-172:         Some(Commands::Daemon) =&gt; {
-173:             let supervisor = std::sync::Arc::new(Supervisor::new(config));
-174:             supervisor.run_daemon().await?;
-175:         }
-176:     }
-177: 
-178:     Ok(())
-179: }</file><file path="src/supervisor.rs">  1: use std::collections::HashSet;
+172:         Some(Commands::Unarchive { task_id, all }) =&gt; {
+173:             if all {
+174:                 let count = unarchive_all(&amp;config)?;
+175:                 println!(&quot;[32m✔ Successfully unarchived {} tasks back into the active queue.[0m&quot;, count);
+176:             } else if let Some(id) = task_id {
+177:                 match unarchive_task(&amp;config, &amp;id)? {
+178:                     Some(_) =&gt; println!(&quot;[32m✔ Successfully unarchived task #{}.[0m&quot;, id),
+179:                     None =&gt; println!(&quot;Archived task #{} not found.&quot;, id),
+180:                 }
+181:             } else {
+182:                 println!(&quot;Usage: autopilot unarchive &lt;TASK_ID&gt; | --all&quot;);
+183:             }
+184:         }
+185:         Some(Commands::Daemon) =&gt; {
+186:             let supervisor = std::sync::Arc::new(Supervisor::new(config));
+187:             supervisor.run_daemon().await?;
+188:         }
+189:     }
+190: 
+191:     Ok(())
+192: }</file><file path="src/supervisor.rs">  1: use std::collections::HashSet;
   2: use std::fs;
   3: use std::path::{Path, PathBuf};
   4: use std::process::Command;
