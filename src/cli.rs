@@ -99,6 +99,16 @@ pub enum Commands {
         list: bool,
     },
 
+    /// Unarchive tasks back into the active list
+    Unarchive {
+        /// Task ID to restore (e.g. 001)
+        task_id: Option<String>,
+
+        /// Unarchive all archived tasks
+        #[arg(long)]
+        all: bool,
+    },
+
     /// Run the 24/7 background supervisor daemon (used by systemd)
     Daemon,
 }

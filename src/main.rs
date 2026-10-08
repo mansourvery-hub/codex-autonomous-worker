@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::Parser;
 use autopilot::cli::{Cli, Commands};
 use autopilot::config::AppConfig;
-use autopilot::campaign::{archive_all_completed, archive_task, load_all_campaigns, queue_campaign, CampaignStatus};
+use autopilot::campaign::{archive_all_completed, archive_task, unarchive_all, unarchive_task, load_all_campaigns, queue_campaign, CampaignStatus};
 use autopilot::supervisor::Supervisor;
 use autopilot::tui::run_tui;
 
@@ -167,6 +167,19 @@ Launch 'autopilot' to enter the live control deck.");
                 }
             } else {
                 println!("Usage: autopilot archive <TASK_ID> | --all | --list");
+            }
+        }
+        Some(Commands::Unarchive { task_id, all }) => {
+            if all {
+                let count = unarchive_all(&config)?;
+                println!("[32m✔ Successfully unarchived {} tasks back into the active queue.[0m", count);
+            } else if let Some(id) = task_id {
+                match unarchive_task(&config, &id)? {
+                    Some(_) => println!("[32m✔ Successfully unarchived task #{}.[0m", id),
+                    None => println!("Archived task #{} not found.", id),
+                }
+            } else {
+                println!("Usage: autopilot unarchive <TASK_ID> | --all");
             }
         }
         Some(Commands::Daemon) => {

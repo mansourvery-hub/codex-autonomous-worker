@@ -461,3 +461,47 @@ pub fn archive_all_completed(config: &AppConfig) -> Result<usize> {
     }
     Ok(count)
 }
+
+pub fn unarchive_task(config: &AppConfig, task_id: &str) -> Result<Option<PathBuf>> {
+    let tasks_dir = config.tasks_dir();
+    let archive_dir = tasks_dir.join("archive");
+    if !archive_dir.exists() {
+        return Ok(None);
+    }
+    let entries = fs::read_dir(&archive_dir)?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let id = stem.split('.').next().unwrap_or("").split('-').next().unwrap_or("");
+        if id == task_id {
+            let dest = tasks_dir.join(&fname);
+            fs::rename(&path, &dest)?;
+            return Ok(Some(dest));
+        }
+    }
+    Ok(None)
+}
+
+pub fn unarchive_all(config: &AppConfig) -> Result<usize> {
+    let tasks_dir = config.tasks_dir();
+    let archive_dir = tasks_dir.join("archive");
+    if !archive_dir.exists() {
+        return Ok(0);
+    }
+    let mut count = 0;
+    let entries = fs::read_dir(&archive_dir)?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let dest = tasks_dir.join(&fname);
+            fs::rename(&path, &dest)?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
